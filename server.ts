@@ -3008,7 +3008,9 @@ app.post('/api/generic/punches', authenticateToken, authorize(['Admin', 'HR']), 
 app.post('/api/generic/users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers } = req.body;
-    const url = `http://${host}:${port || 80}${endpoint || '/api/users'}`;
+    const rawUrl = `http://${host}:${port || 80}${endpoint || '/api/users'}`;
+    if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: 'Host not allowed (internal IP blocked)' });
+    const url = rawUrl;
     const response = await fetchWithRetry(
       url,
       {
@@ -3052,7 +3054,9 @@ app.post('/api/generic/users', authenticateToken, authorize(['Admin', 'HR']), as
 app.post('/api/generic/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers, employees } = req.body;
-    const url = `http://${host}:${port || 80}${endpoint || '/api/users/sync'}`;
+    const rawUrl = `http://${host}:${port || 80}${endpoint || '/api/users/sync'}`;
+    if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: 'Host not allowed (internal IP blocked)' });
+    const url = rawUrl;
     const response = await fetchWithRetry(
       url,
       {
