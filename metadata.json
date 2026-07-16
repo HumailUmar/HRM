@@ -1,0 +1,6 @@
+{
+  "name": "Humail Eli - HRM",
+  "description": "A complete Human Resource Management system for HR professionals and business owners to manage employee lifecycle, daily attendance, payroll calculations, and resume recruitment pipelines.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
