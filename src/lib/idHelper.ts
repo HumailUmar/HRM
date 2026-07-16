@@ -72,16 +72,13 @@ export async function getNextId(entity: string, prefix: string = ''): Promise<st
         const [rows] = await connection.query('SELECT LAST_INSERT_ID() AS next_val');
         const nextVal = (rows as any[])[0]?.next_val;
         if (nextVal && nextVal > 0) {
+          connection.release();
           return `${prefix}${String(nextVal).padStart(4, '0')}`;
         }
       } finally {
         connection.release();
       }
-      
-      // Fallback if single connection fails or returns zero
-      const [directRows] = await conn.pool.query(`SELECT next_val FROM ${table} WHERE entity = ?`, [entity]);
-      const nextVal = (directRows as any[])[0]?.next_val || 1000;
-      return `${prefix}${String(nextVal).padStart(4, '0')}`;
+      throw new Error('Failed to obtain next ID from counter');
     } else {
       // PostgreSQL
       query = `

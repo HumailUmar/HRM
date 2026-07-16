@@ -71,7 +71,7 @@ export default function MyLeave({ user }: { user: any }) {
                   <div className="w-full bg-slate-100 rounded-full h-2">
                     <div 
                       className="bg-green-500 h-2 rounded-full" 
-                      style={{ width: `${(lt.used / lt.total) * 100}%` }}
+                      style={{ width: `${lt.total > 0 ? (lt.used / lt.total) * 100 : 0}%` }}
                     />
                   </div>
                 </td>

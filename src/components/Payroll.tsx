@@ -126,7 +126,7 @@ export default function Payroll({
       const netSalary = Math.max(0, base + bonus - penalty - leaveDeductions);
 
       return {
-        id: `PAY-${Date.now().toString().slice(-4)}-${emp.id.split('-')[1]}`,
+        id: `PAY-${Date.now().toString().slice(-4)}-${emp.id?.split('-')[1] ?? String(emp.id)}`,
         employeeId: emp.id,
         employeeName: emp.name,
         month: selectedMonth,

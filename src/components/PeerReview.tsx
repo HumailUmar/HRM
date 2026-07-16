@@ -142,6 +142,7 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
 
   // Auto-create assignments for testing
   useEffect(() => {
+    let cancelled = false;
     if (assignments.length === 0 && employees.length > 1 && cycles.length > 0) {
       const activeCycles = cycles.filter(c => c.status === 'Active' && c.includesPeerReview);
       if (activeCycles.length > 0) {
@@ -162,12 +163,13 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
             });
           });
         });
-        if (newAssignments.length > 0) {
+        if (newAssignments.length > 0 && !cancelled) {
           setAssignments(newAssignments);
           savePeerAssignments(newAssignments);
         }
       }
     }
+    return () => { cancelled = true; };
   }, [assignments, employees, cycles]);
 
   if (selectedPeer && selectedCycle && currentReview) {

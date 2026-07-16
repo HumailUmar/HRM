@@ -246,7 +246,7 @@ export default function SystemTest() {
           const newQ = { id: 'q1', question: 'Test Q', description: 'Desc', category: 'Skills', isRequired: true, maxScore: 5 };
           const updated = templates.map(tmpl => tmpl.id === t.id ? { ...tmpl, sections: [{ ...tmpl.sections[0], questions: [...(tmpl.sections[0]?.questions || []), newQ] }] } : tmpl);
           savePerformanceReviewTemplates(updated);
-          success = getPerformanceReviewTemplates()[0].sections[0].questions.length > 0;
+          success = getPerformanceReviewTemplates()[0]?.sections?.[0]?.questions?.length ?? 0 > 0;
           savePerformanceReviewTemplates(templates);
         } else success = true;
       } else if (testId === 'per-4' || testId === 'per-5') {

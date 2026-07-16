@@ -143,8 +143,8 @@ export default function Documents({ documents, setDocuments, employees, designat
     const matchesType = filterType === 'all' || doc.documentType === filterType;
     const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
     const matchesSearch = !searchTerm || 
-      doc.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
+      (doc.fileName ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (doc.employeeName ?? '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesEmployee && matchesType && matchesStatus && matchesSearch;
   });
 
@@ -287,7 +287,7 @@ export default function Documents({ documents, setDocuments, employees, designat
                         <div className="flex flex-wrap gap-x-4 text-xs text-slate-500">
                           <span>{doc.employeeName}</span>
                           <span>{doc.documentTypeLabel}</span>
-                          <span>{(doc.fileSize / 1024).toFixed(1)} KB</span>
+                          <span>{Number(doc.fileSize) ? (doc.fileSize / 1024).toFixed(1) : '0.0'} KB</span>
                           <span>{new Date(doc.uploadedAt).toLocaleDateString()}</span>
                         </div>
                       </div>

@@ -470,7 +470,7 @@ export default function BulkImport({
             calculatedStatus = 'Absent';
           } else {
             if (checkIn) {
-              const [inH, inM] = checkIn.split(':').map(Number);
+              const [inH, inM] = (checkIn || '09:00').split(':').map(Number);
               if (isNaN(inH) || isNaN(inM)) throw new Error(`Invalid Check-In time format: "${checkIn}"`);
               const inTotal = inH * 60 + inM;
               const lateThresholdStr = settings.attendanceRules?.lateThreshold || "09:05";
@@ -488,7 +488,7 @@ export default function BulkImport({
             }
 
             if (checkOut) {
-              const [outH, outM] = checkOut.split(':').map(Number);
+              const [outH, outM] = (checkOut || '17:00').split(':').map(Number);
               if (isNaN(outH) || isNaN(outM)) throw new Error(`Invalid Check-Out time format: "${checkOut}"`);
               const outTotal = outH * 60 + outM;
               const earlyOutStr = settings.attendanceRules?.earlyDepartureThreshold || "17:55";

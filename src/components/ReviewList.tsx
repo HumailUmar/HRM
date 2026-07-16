@@ -40,9 +40,9 @@ export default function ReviewList({ user }: ReviewListProps) {
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(r =>
-        r.employeeName.toLowerCase().includes(term) ||
-        r.reviewerName.toLowerCase().includes(term) ||
-        r.reviewCycleName.toLowerCase().includes(term)
+        (r.employeeName ?? '').toLowerCase().includes(term) ||
+        (r.reviewerName ?? '').toLowerCase().includes(term) ||
+        (r.reviewCycleName ?? '').toLowerCase().includes(term)
       );
     }
 

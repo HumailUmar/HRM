@@ -83,13 +83,15 @@ export default function Succession({ employees, isMockMode, settings, department
   // Persist Plans changes automatically
   useEffect(() => {
     if (!isDataLoaded) return;
+    let cancelled = false;
     if (isMockMode) {
       saveSuccessionPlans(plans);
     } else {
       import('../lib/storage').then(({ syncAllSuccessionPlansToGSheet }) => {
-        syncAllSuccessionPlansToGSheet(plans).catch(logger.error);
+        if (!cancelled) syncAllSuccessionPlansToGSheet(plans).catch(logger.error);
       });
     }
+    return () => { cancelled = true; };
   }, [plans, isMockMode, isDataLoaded]);
 
   // Save Nodes handler

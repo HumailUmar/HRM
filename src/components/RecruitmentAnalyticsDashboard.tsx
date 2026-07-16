@@ -363,7 +363,7 @@ export default function RecruitmentAnalyticsDashboard({ candidates, jobDescripti
                 {funnelData.slice(0, -1).map((f, i) => {
                   const nextStage = funnelData[i + 1];
                   const dropped = f.count - nextStage.count;
-                  const dropRate = (dropped / f.count) * 100;
+                  const dropRate = f.count > 0 ? (dropped / f.count) * 100 : 0;
                   return (
                     <tr key={f.stage} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-3 px-4 font-semibold text-slate-800">{f.stage}</td>

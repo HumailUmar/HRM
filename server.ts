@@ -703,7 +703,7 @@ app.delete('/api/v1/employees/:id', authenticateToken, authorize(['Admin']), asy
 // ===== ATTENDANCE API =====
 
 // GET /api/v1/attendance
-app.get('/api/v1/attendance', async (req, res) => {
+app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, startDate, endDate } = req.query as Record<string, string | undefined>;
     let records = await getAttendanceFromDB();
@@ -717,7 +717,7 @@ app.get('/api/v1/attendance', async (req, res) => {
 });
 
 // POST /api/v1/attendance
-app.post('/api/v1/attendance', async (req, res) => {
+app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const validation = AttendanceSchema.safeParse(req.body);
     if (!validation.success) {
@@ -742,7 +742,7 @@ app.post('/api/v1/attendance', async (req, res) => {
 // ===== LEAVE API =====
 
 // GET /api/v1/leaves
-app.get('/api/v1/leaves', async (req, res) => {
+app.get('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, status } = req.query as Record<string, string | undefined>;
     let leaves = await getLeavesFromDB();
@@ -755,7 +755,7 @@ app.get('/api/v1/leaves', async (req, res) => {
 });
 
 // POST /api/v1/leaves
-app.post('/api/v1/leaves', async (req, res) => {
+app.post('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const validation = LeaveSchema.safeParse(req.body);
     if (!validation.success) {
@@ -799,7 +799,7 @@ app.put('/api/v1/leaves/:id/approve', authenticateToken, authorize(['HR', 'Admin
 // ===== PAYROLL API =====
 
 // GET /api/v1/payroll
-app.get('/api/v1/payroll', async (req, res) => {
+app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const { employeeId, month } = req.query as Record<string, string | undefined>;
     let payroll = await getPayrollFromDB();
@@ -1776,7 +1776,7 @@ app.get('/api/drive/folders', authenticateToken, async (req, res) => {
 });
 
 // POST /api/drive/create-folder - Create a new folder
-app.post('/api/drive/create-folder', async (req, res) => {
+app.post('/api/drive/create-folder', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const { accessToken, folderName, parentFolderId } = req.body;
     
@@ -2072,7 +2072,7 @@ app.post('/api/sheets/create-in-folder', authenticateToken, async (req, res) => 
 // ===== BIOMETRIC DEVICE ENDPOINTS =====
 
 // POST /api/biometric/test - Test connection to biometric device
-app.post('/api/biometric/test', async (req, res) => {
+app.post('/api/biometric/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { deviceType, config } = req.body;
     
@@ -2106,7 +2106,7 @@ app.post('/api/biometric/test', async (req, res) => {
 });
 
 // POST /api/biometric/sync - Sync attendance from biometric device
-app.post('/api/biometric/sync', async (req, res) => {
+app.post('/api/biometric/sync', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { deviceType, config, startDate, endDate, isMockMode } = req.body;
     
@@ -2163,7 +2163,7 @@ app.post('/api/biometric/sync', async (req, res) => {
 });
 
 // GET /api/biometric/status - Get device status
-app.get('/api/biometric/status', async (req, res) => {
+app.get('/api/biometric/status', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   res.json({
     success: true,
     status: 'online',
@@ -2212,7 +2212,7 @@ app.post('/api/ai/test', authenticateToken, async (req, res) => {
 // ===== ZKTECO DEVICE INTEGRATION =====
 
 // POST /api/zkteco/test - Test connection to ZKTeco device
-app.post('/api/zkteco/test', async (req, res) => {
+app.post('/api/zkteco/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
     
@@ -2236,7 +2236,9 @@ app.post('/api/zkteco/test', async (req, res) => {
 
     for (const endpoint of endpoints) {
       try {
-        const url = `http://${host}:${port || 80}${endpoint.path}`;
+        const rawUrl = `http://${host}:${port || 80}${endpoint.path}`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
         const authHeader = apiKey 
           ? `Bearer ${apiKey}`
           : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`;
@@ -2326,7 +2328,7 @@ app.post('/api/zkteco/test', async (req, res) => {
 });
 
 // POST /api/zkteco/punches - Fetch attendance punches from ZKTeco
-app.post('/api/zkteco/punches', authenticateToken, async (req, res) => {
+app.post('/api/zkteco/punches', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, startDate, endDate } = req.body;
     if (!host) return res.status(400).json({ success: false, error: 'Device host/IP is required' });
@@ -2351,7 +2353,7 @@ app.post('/api/zkteco/punches', authenticateToken, async (req, res) => {
 });
 
 // POST /api/zkteco/users - Fetch users from ZKTeco
-app.post('/api/zkteco/users', async (req, res) => {
+app.post('/api/zkteco/users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
     
@@ -2362,7 +2364,9 @@ app.post('/api/zkteco/users', async (req, res) => {
       });
     }
 
-    const url = `http://${host}:${port || 80}/api/users`;
+    const rawUrl = `http://${host}:${port || 80}/api/users`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
     const response = await fetchWithRetry(
       url,
       {
@@ -2408,7 +2412,7 @@ app.post('/api/zkteco/users', async (req, res) => {
 });
 
 // POST /api/zkteco/sync-users - Sync employees to ZKTeco
-app.post('/api/zkteco/sync-users', async (req, res) => {
+app.post('/api/zkteco/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, employees } = req.body;
     
@@ -2419,7 +2423,9 @@ app.post('/api/zkteco/sync-users', async (req, res) => {
       });
     }
 
-    const url = `http://${host}:${port || 80}/api/users/sync`;
+    const rawUrl = `http://${host}:${port || 80}/api/users/sync`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
     const response = await fetchWithRetry(
       url,
       {
@@ -2459,7 +2465,7 @@ app.post('/api/zkteco/sync-users', async (req, res) => {
 // ===== BIOSTAR DEVICE INTEGRATION =====
 
 // POST /api/biostar/test - Test connection to BioStar device
-app.post('/api/biostar/test', async (req, res) => {
+app.post('/api/biostar/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
     
@@ -2478,7 +2484,9 @@ app.post('/api/biostar/test', async (req, res) => {
 
     for (const endpoint of endpoints) {
       try {
-        const url = `http://${host}:${port || 80}${endpoint.path}`;
+        const rawUrl = `http://${host}:${port || 80}${endpoint.path}`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
         const authHeader = apiKey 
           ? `Bearer ${apiKey}`
           : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`;
@@ -2544,7 +2552,7 @@ app.post('/api/biostar/test', async (req, res) => {
 });
 
 // POST /api/biostar/punches - Fetch attendance punches from BioStar
-app.post('/api/biostar/punches', authenticateToken, async (req, res) => {
+app.post('/api/biostar/punches', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, startDate, endDate } = req.body;
     if (!host) return res.status(400).json({ success: false, error: 'Device host/IP is required' });
@@ -2569,11 +2577,13 @@ app.post('/api/biostar/punches', authenticateToken, async (req, res) => {
 });
 
 // POST /api/biostar/users - Fetch users from BioStar
-app.post('/api/biostar/users', async (req, res) => {
+app.post('/api/biostar/users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
     
-    const url = `http://${host}:${port || 80}/api/v1/users`;
+    const rawUrl = `http://${host}:${port || 80}/api/v1/users`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
     const response = await fetchWithRetry(
       url,
       {
@@ -2610,11 +2620,13 @@ app.post('/api/biostar/users', async (req, res) => {
 });
 
 // POST /api/biostar/sync-users - Sync employees to BioStar
-app.post('/api/biostar/sync-users', async (req, res) => {
+app.post('/api/biostar/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, employees } = req.body;
     
-    const url = `http://${host}:${port || 80}/api/v1/users/sync`;
+    const rawUrl = `http://${host}:${port || 80}/api/v1/users/sync`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
     const response = await fetchWithRetry(
       url,
       {
@@ -2658,7 +2670,7 @@ app.post('/api/biostar/sync-users', async (req, res) => {
 // ===== HIKVISION DEVICE INTEGRATION =====
 
 // POST /api/hikvision/test - Test connection to Hikvision device
-app.post('/api/hikvision/test', async (req, res) => {
+app.post('/api/hikvision/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
     
@@ -2666,7 +2678,9 @@ app.post('/api/hikvision/test', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Device host/IP is required' });
     }
 
-    const url = `http://${host}:${port || 80}/ISAPI/System/deviceInfo`;
+    const rawUrl = `http://${host}:${port || 80}/ISAPI/System/deviceInfo`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
     const authHeader = apiKey 
       ? `Bearer ${apiKey}`
       : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`;
@@ -2735,7 +2749,7 @@ app.post('/api/hikvision/test', async (req, res) => {
 });
 
 // POST /api/hikvision/punches - Fetch attendance punches from Hikvision
-app.post('/api/hikvision/punches', authenticateToken, async (req, res) => {
+app.post('/api/hikvision/punches', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, startDate, endDate } = req.body;
     if (!host) return res.status(400).json({ success: false, error: 'Device host/IP is required' });
@@ -2775,10 +2789,12 @@ app.post('/api/hikvision/punches', authenticateToken, async (req, res) => {
 });
 
 // POST /api/hikvision/users - Fetch users from Hikvision
-app.post('/api/hikvision/users', async (req, res) => {
+app.post('/api/hikvision/users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
-    const url = `http://${host}:${port || 80}/ISAPI/AccessControl/UserInfo/Search`;
+    const rawUrl = `http://${host}:${port || 80}/ISAPI/AccessControl/UserInfo/Search`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
     const response = await fetchWithRetry(
       url,
       {
@@ -2823,7 +2839,7 @@ app.post('/api/hikvision/users', async (req, res) => {
 });
 
 // POST /api/hikvision/sync-users - Sync employees to Hikvision
-app.post('/api/hikvision/sync-users', async (req, res) => {
+app.post('/api/hikvision/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { employees } = req.body;
     res.json({
@@ -2839,7 +2855,7 @@ app.post('/api/hikvision/sync-users', async (req, res) => {
 // ===== GENERIC HTTP API DEVICE INTEGRATION =====
 
 // POST /api/generic/test - Test connection to Generic HTTP API device
-app.post('/api/generic/test', async (req, res) => {
+app.post('/api/generic/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers } = req.body;
     
@@ -2847,7 +2863,9 @@ app.post('/api/generic/test', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Host and endpoint are required' });
     }
 
-    const url = `http://${host}:${port || 80}${endpoint}`;
+    const rawUrl = `http://${host}:${port || 80}${endpoint}`;
+      if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+      const url = rawUrl;
     const errors: string[] = [];
 
     try {
@@ -2857,7 +2875,10 @@ app.post('/api/generic/test', async (req, res) => {
           headers: {
             'Authorization': apiKey ? `Bearer ${apiKey}` : '',
             'Content-Type': 'application/json',
-            ...(headers || {})
+            // Sanitize caller-supplied headers to prevent header injection
+            ...(headers && typeof headers === 'object' ?
+              Object.fromEntries(Object.entries(headers).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && !['host', 'content-length', 'authorization'].includes(k.toLowerCase()))) :
+              {})
           },
           timeout: 5000,
         },
@@ -2914,7 +2935,7 @@ app.post('/api/generic/test', async (req, res) => {
 });
 
 // POST /api/generic/punches - Fetch attendance punches from Generic API
-app.post('/api/generic/punches', authenticateToken, async (req, res) => {
+app.post('/api/generic/punches', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers, fieldMapping, startDate, endDate } = req.body;
     if (!host || !endpoint) return res.status(400).json({ success: false, error: 'Host and endpoint are required' });
@@ -2984,7 +3005,7 @@ app.post('/api/generic/punches', authenticateToken, async (req, res) => {
 });
 
 // POST /api/generic/users - Fetch users from Generic API
-app.post('/api/generic/users', async (req, res) => {
+app.post('/api/generic/users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers } = req.body;
     const url = `http://${host}:${port || 80}${endpoint || '/api/users'}`;
@@ -2993,7 +3014,10 @@ app.post('/api/generic/users', async (req, res) => {
       {
         headers: {
           'Authorization': apiKey ? `Bearer ${apiKey}` : '',
-          ...(headers || {})
+          // Sanitize caller-supplied headers to prevent header injection
+          ...(headers && typeof headers === 'object' ?
+            Object.fromEntries(Object.entries(headers).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && !['host', 'content-length', 'authorization'].includes(k.toLowerCase()))) :
+            {})
         },
         timeout: DEFAULT_TIMEOUT_MS
       },
@@ -3025,7 +3049,7 @@ app.post('/api/generic/users', async (req, res) => {
 });
 
 // POST /api/generic/sync-users - Sync employees to Generic API
-app.post('/api/generic/sync-users', async (req, res) => {
+app.post('/api/generic/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers, employees } = req.body;
     const url = `http://${host}:${port || 80}${endpoint || '/api/users/sync'}`;
@@ -3036,7 +3060,10 @@ app.post('/api/generic/sync-users', async (req, res) => {
         headers: {
           'Authorization': apiKey ? `Bearer ${apiKey}` : '',
           'Content-Type': 'application/json',
-          ...(headers || {})
+          // Sanitize caller-supplied headers to prevent header injection
+          ...(headers && typeof headers === 'object' ?
+            Object.fromEntries(Object.entries(headers).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && !['host', 'content-length', 'authorization'].includes(k.toLowerCase()))) :
+            {})
         },
         body: JSON.stringify({ users: employees.map((e: any) => ({ id: e.id, name: e.name })) }),
         timeout: 15000

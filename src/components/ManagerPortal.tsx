@@ -345,7 +345,10 @@ export default function ManagerPortal({ user, departments, designations, initial
             <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
               <p className="text-xs text-slate-500">Avg Score</p>
               <p className="text-2xl font-bold text-indigo-600">
-                {teamReviews.length > 0 ? Math.round(teamReviews.filter(r => r.status === 'Completed').reduce((sum, r) => sum + (r.overallScore || 0), 0) / teamReviews.filter(r => r.status === 'Completed').length) : '—'}%
+                {teamReviews.length > 0 ? (() => {
+                  const completedReviews = teamReviews.filter(r => r.status === 'Completed');
+                  return completedReviews.length > 0 ? Math.round(completedReviews.reduce((sum, r) => sum + (r.overallScore || 0), 0) / completedReviews.length) : 0;
+                })() : '—'}%
               </p>
             </div>
             <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
