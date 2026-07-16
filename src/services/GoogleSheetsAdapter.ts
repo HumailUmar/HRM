@@ -331,7 +331,13 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async saveJDMatches(matches: JDResumeMatch[]): Promise<void> { await this.localFallback.saveJDMatches(matches); }
 
   // STORAGE HELPERS / LOGGING
-  async addSheetLog(sheetName: string, action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC', rowData: object): Promise<void> { await this.localFallback.addSheetLog(sheetName, action, rowData); }
+  async addSheetLog(sheetName: string, action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC', rowData: object): Promise<void> {
+    try {
+      await this.localFallback.addSheetLog(sheetName, action, rowData);
+    } catch (e: any) {
+      logger.error('addSheetLog failed:', e?.message);
+    }
+  }
   generateEmployeeDiff(
     oldEmp: Employee | null,
     newEmp: Employee,

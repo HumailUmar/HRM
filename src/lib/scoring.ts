@@ -72,11 +72,11 @@ function validateKPIs(
     errors.push(`Missing required KPIs: ${missingRequired.join(', ')}`);
   }
 
-  // Check weights
-  const totalWeight = kpis.reduce((sum, k) => sum + k.weight, 0);
-  if (Math.abs(totalWeight - 1) > 0.001) {
-    warnings.push(`KPI weights sum to ${totalWeight * 100}% (expected 100%)`);
-  }
+   // Check weights
+   const totalWeight = kpis.reduce((sum, k) => sum + (Number.isFinite(k.weight) ? k.weight : 0), 0);
+   if (!Number.isFinite(totalWeight) || Math.abs(totalWeight - 1) > 0.001) {
+     warnings.push(`KPI weights sum to ${totalWeight * 100}% (expected 100%)`);
+   }
 
   return { errors, warnings };
 }
@@ -158,8 +158,8 @@ export function calculateSectionScore(
   }
 
   // 3. Validate weights sum to 1
-  const totalWeight = kpis.reduce((sum, k) => sum + k.weight, 0);
-  if (Math.abs(totalWeight - 1) > 0.001) {
+  const totalWeight = kpis.reduce((sum, k) => sum + (Number.isFinite(k.weight) ? k.weight : 0), 0);
+  if (!Number.isFinite(totalWeight) || Math.abs(totalWeight - 1) > 0.001) {
     warnings.push(`Section ${sectionId} weights sum to ${totalWeight * 100}% (expected 100%)`);
   }
 
@@ -174,15 +174,21 @@ export function calculateSectionScore(
 
   for (const kpi of kpis) {
     const score = scores[kpi.id];
-    if (score === undefined || isNaN(score) || score < 0) {
+    const weight = Number.isFinite(kpi.weight) ? kpi.weight : 0;
+    if (score === undefined || !Number.isFinite(score) || score < 0) {
       scoreErrors.push(`KPI ${kpi.id} has invalid score: ${score}`);
       continue;
     }
-    weightedScore += score * kpi.weight;
+    weightedScore += score * weight;
   }
 
   if (scoreErrors.length > 0) {
     errors.push(...scoreErrors);
+    return { score: 0, errors, warnings };
+  }
+
+  if (!Number.isFinite(weightedScore)) {
+    errors.push(`Section ${sectionId} produced a non-finite score`);
     return { score: 0, errors, warnings };
   }
 
@@ -232,17 +238,23 @@ export function calculateOverallScore(
     warnings.push(...secWarnings);
 
     // Weighted by section weight
-    overallScore += score * section.weight;
+    const sectionWeight = Number.isFinite(section.weight) ? section.weight : 0;
+    overallScore += score * sectionWeight;
   }
 
   // 3. Check section weights sum to 1
-  const totalSectionWeight = sections.reduce((sum, s) => sum + s.weight, 0);
-  if (Math.abs(totalSectionWeight - 1) > 0.001) {
+  const totalSectionWeight = sections.reduce((sum, s) => sum + (Number.isFinite(s.weight) ? s.weight : 0), 0);
+  if (!Number.isFinite(totalSectionWeight) || Math.abs(totalSectionWeight - 1) > 0.001) {
     warnings.push(`Section weights sum to ${totalSectionWeight * 100}% (expected 100%)`);
   }
 
   if (errors.length > 0 || sectionErrors.length > 0) {
     errors.push(...sectionErrors);
+    return { score: 0, errors, warnings };
+  }
+
+  if (!Number.isFinite(overallScore)) {
+    errors.push('Overall score is non-finite');
     return { score: 0, errors, warnings };
   }
 
@@ -262,16 +274,20 @@ export function calculateOverallScore(
  * NO function calls, NO object access, NO array access, NO arbitrary code execution.
  */
 function safeEvaluate(expression: string, score: number): boolean {
+  if (!Number.isFinite(score)) {
+    throw new Error(`Cannot evaluate against non-finite score: ${score}`);
+  }
   // 1. Replace 'score' with the actual numeric value
   const sanitized = expression.replace(/score/g, String(score));
-  
-  // 2. Validate that the expression contains ONLY safe characters
-  // Allowed: numbers, operators, parentheses, whitespace, boolean literals
-  const allowedPattern = /^[\d\s+\-*/%=<>!&|().]+$/;
+
+  // 2. Validate that the expression contains ONLY safe characters.
+  // Arithmetic operators (* / %) are NOT allowed: conditions must be comparisons.
+  // Permitting them let misconfigured conditions silently evaluate to false.
+  const allowedPattern = /^[\d\s+\-.]+$/;
   if (!allowedPattern.test(sanitized)) {
-    throw new Error(`Unsafe expression detected: "${expression}"`);
+    throw new Error(`Unsafe or unsupported expression detected: "${expression}"`);
   }
-  
+
   // 3. For maximum safety, use a simple parser.
   return evaluateSafeExpression(sanitized);
 }

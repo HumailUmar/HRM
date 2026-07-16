@@ -101,8 +101,15 @@ export async function getNextId(entity: string, prefix: string = ''): Promise<st
 
 /**
  * For use when you already have an insert that uses a sequence.
+ * sequenceName must be a simple identifier (alphanumeric + underscore) to
+ * prevent SQL injection via identifier interpolation.
  */
+const VALID_SEQUENCE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 export async function getNextIdFromSequence(sequenceName: string, prefix: string = ''): Promise<string> {
+  if (!VALID_SEQUENCE_NAME.test(sequenceName)) {
+    throw new Error(`Invalid sequence name: "${sequenceName}". Only alphanumeric and underscore allowed.`);
+  }
   try {
     const { getConnection } = await import(/* @vite-ignore */ '../services/serverDatabase');
     const conn = await getConnection();

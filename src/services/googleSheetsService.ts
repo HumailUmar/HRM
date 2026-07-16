@@ -2,7 +2,9 @@ import { logger } from '../lib/logger';
 import { getAccessToken } from '../lib/auth';
 import { getSettings } from '../lib/storage';
 
-// Generic fetch with error handling and Authorization header
+const SHEETS_TIMEOUT_MS = 30000;
+
+// Generic fetch with error handling, timeout, and Authorization header
 async function callSheetsApi(endpoint: string, method = 'GET', body?: any) {
   const token = getAccessToken();
   const settings = getSettings();
@@ -16,14 +18,28 @@ async function callSheetsApi(endpoint: string, method = 'GET', body?: any) {
   }
 
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}${endpoint}`;
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SHEETS_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Google Sheets request timed out after 30s');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const errText = await response.text();
@@ -48,14 +64,16 @@ async function getSheetIdByName(sheetName: string): Promise<number | null> {
 }
 
 /**
- * Read data from a Google Sheet range
+ * Read data from a Google Sheet range.
+ * Only returns [] when the spreadsheet is genuinely unconfigured. Any other
+ * error is rethrown so callers surface it instead of masking as empty data.
  */
 export async function readSheet(sheetName: string, range: string): Promise<any[][]> {
   try {
     const result = await callSheetsApi(`/values/${encodeURIComponent(sheetName)}!${range}`);
     return result.values || [];
   } catch (e: any) {
-    if (e.message === 'Google Sheet ID is not set. Please set it in Settings.') {
+    if (e?.message === 'Google Sheet ID is not set. Please set it in Settings.') {
       return [];
     }
     throw e;
@@ -177,13 +195,26 @@ export async function uploadToDrive(fileName: string, mimeType: string, content:
   );
   form.append('file', content instanceof Blob ? content : new Blob([content], { type: mimeType }));
 
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-    body: form,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SHEETS_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: form,
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Google Drive upload timed out after 30s');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const errText = await response.text();

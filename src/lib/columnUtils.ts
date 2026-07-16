@@ -1,14 +1,22 @@
 /**
  * Convert a 1-based column index to an Excel-style column letter.
- * Example: 1 -> "A", 26 -> "Z", 27 -> "AA", 52 -> "AZ", 53 -> "BA"
+ * Example: 1 -> "A", 26 -> "Z", 27 -> "AA"
+ * Guards against NaN/Infinity/<=0 to prevent infinite loops or invalid ranges.
  */
 export function getColumnLetter(colIndex: number): string {
+  if (!Number.isFinite(colIndex) || colIndex <= 0) {
+    return '';
+  }
+  const num = Math.floor(colIndex);
+  if (num > 18278) {
+    return '';
+  }
   let result = '';
-  let num = colIndex;
-  while (num > 0) {
-    const remainder = (num - 1) % 26;
+  let n = num;
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
     result = String.fromCharCode(65 + remainder) + result;
-    num = Math.floor((num - 1) / 26);
+    n = Math.floor((n - 1) / 26);
   }
   return result;
 }

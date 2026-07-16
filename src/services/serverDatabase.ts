@@ -64,6 +64,7 @@ export async function getConnection() {
         ssl: dbInfo.config.ssl ? {} : undefined,
         connectionLimit: dbInfo.config.poolSize,
         connectTimeout: dbInfo.config.timeout,
+        ...(dbInfo.config.timeout ? { acquireTimeout: dbInfo.config.timeout, maxIdle: dbInfo.config.poolSize } : {}),
       });
       dbType = 'mysql';
       currentConfigKey = configKey;
@@ -81,6 +82,7 @@ export async function getConnection() {
         ssl: dbInfo.config.ssl ? { rejectUnauthorized: false } : undefined,
         max: dbInfo.config.poolSize,
         idleTimeoutMillis: dbInfo.config.timeout,
+        ...(dbInfo.config.timeout ? { statement_timeout: dbInfo.config.timeout, query_timeout: dbInfo.config.timeout } : {}),
       });
       dbType = 'postgresql';
       currentConfigKey = configKey;

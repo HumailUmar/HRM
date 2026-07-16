@@ -898,15 +898,20 @@ export interface SheetLog {
 
 export const getSheetLogs = (): SheetLog[] => loadData<SheetLog[]>('sheet_logs', []);
 export const addSheetLog = (sheetName: string, action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC', rowData: object) => {
-  const logs = loadData<SheetLog[]>('sheet_logs', []);
-  const newLog: SheetLog = {
-    id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-    sheetName,
-    timestamp: new Date().toISOString(),
-    action,
-    rowData: JSON.stringify(rowData)
-  };
-  saveData<SheetLog[]>('sheet_logs', [newLog, ...logs]);
+  try {
+    const logs = loadData<SheetLog[]>('sheet_logs', []);
+    const newLog: SheetLog = {
+      id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+      sheetName,
+      timestamp: new Date().toISOString(),
+      action,
+      rowData: JSON.stringify(rowData)
+    };
+    saveData<SheetLog[]>('sheet_logs', [newLog, ...logs]);
+  } catch (err) {
+    // Fire-and-forget logging must never throw into callers (unhandled rejection).
+    logger.error('addSheetLog failed:', err);
+  }
 };
 
 // Synchronous Getters & Setters for UI state / Offline fallback / Mock mode
