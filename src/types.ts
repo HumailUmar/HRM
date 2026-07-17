@@ -202,6 +202,60 @@ export interface Employee {
   punchCode?: string;
   name: string;
   email: string;
+  phone?: string;
+  personalEmail?: string;
+  dateOfBirth?: string;
+  gender?: PersonalInfo['gender'];
+  nationality?: string;
+  cnic?: string;
+  cnicFrontImage?: string;
+  cnicBackImage?: string;
+  religion?: string;
+  maritalStatus?: PersonalInfo['maritalStatus'];
+  bloodGroup?: PersonalInfo['bloodGroup'];
+  phoneWork?: string;
+  phonePersonal?: string;
+  currentAddress?: string;
+  permanentAddress?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  emergencyContactName?: string;
+  emergencyRelationship?: string;
+  emergencyContactPhone?: string;
+  employmentType?: EmploymentDetails['employmentType'];
+  grade?: string;
+  jobCategory?: string;
+  isProbation?: boolean;
+  probationStartDate?: string;
+  probationEndDate?: string;
+  confirmationDate?: string;
+  workLocation?: EmploymentDetails['workLocation'];
+  shift?: string;
+  costCenter?: string;
+  payrollGroup?: string;
+  departmentId?: string;
+  designationId?: string;
+  seatNumber?: number;
+  reportingManagerId?: string;
+  leaveStartDate?: string;
+  leaveEndDate?: string;
+  leaveType?: string;
+  suspensionStartDate?: string;
+  suspensionEndDate?: string;
+  suspensionReason?: string;
+  resignationDate?: string;
+  lastWorkingDate?: string;
+  retirementDate?: string;
+  terminationDate?: string;
+  terminationReason?: string;
+  onboardingTemplateId?: string;
+  onboardingTasksCompleted?: string[];
+  onboardingTasksStatus?: { [taskId: string]: 'pending' | 'in-progress' | 'completed' | 'overdue' };
+  educationList?: EmployeeEducation[];
+  certificationsList?: EmployeeCertification[];
+  previousEmployersList?: PreviousEmployer[];
   status: EmploymentDetails["status"];
   role?: string;
   department?: string;
@@ -386,7 +440,10 @@ export interface Candidate {
     degree: string;        // e.g., "BS Computer Science"
     fieldOfStudy?: string; // e.g., "Computer Science"
     institution?: string;  // e.g., "Stanford University"
+    startDate?: string;
+    endDate?: string;
     yearOfGraduation?: string;
+    isHighest?: boolean;
   }[];
   
   certifications?: {
@@ -593,7 +650,7 @@ export interface LeaveRecord {
   startDate: string;
   endDate: string;
   reason: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   approvedBy?: string;
   approvedAt?: string;
   rejectedReason?: string;
@@ -1505,7 +1562,7 @@ export interface PerformanceReview {
   goals: string;
   recommendation: 'Promote' | 'Retain' | 'Needs Improvement' | 'Performance Improvement Plan' | 'Terminate';
   additionalComments: string;
-  status: 'Draft' | 'Submitted' | 'Acknowledged' | 'Completed';
+  status: 'Draft' | 'In Progress' | 'Submitted' | 'Acknowledged' | 'Completed';
   submittedAt?: string;
   acknowledgedAt?: string;
   createdAt: string;
@@ -1579,14 +1636,14 @@ export interface ReviewTemplateKPI {
 
 export interface DecisionMatrix {
   id: string;
-  templateId: string;
+  templateId?: string;
   condition: string;
   recommendation: string;
 }
 
 export interface RedFlag {
   id: string;
-  templateId: string;
+  templateId?: string;
   condition: string;
   alertMessage: string;
 }

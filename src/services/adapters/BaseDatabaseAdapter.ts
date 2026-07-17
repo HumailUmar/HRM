@@ -22,7 +22,10 @@ import {
   EmployeeHistoryEntry,
   ExitRecord,
   ExitChecklistTemplate,
-  ExitInterviewTemplate
+  ExitInterviewTemplate,
+  LegacyOnboardingTask,
+  OnboardingTemplate,
+  JobDescription,
 } from '../../types';
 
 export interface DatabaseConnectionConfig {
@@ -141,6 +144,14 @@ export abstract class BaseDatabaseAdapter implements IDataAdapter {
   // ===== DOCUMENTS =====
   abstract getDocuments(): Promise<EmployeeDocument[]>;
   abstract saveDocument(document: EmployeeDocument): Promise<void>;
+  abstract getEmployeeDocuments(): Promise<EmployeeDocument[]>;
+  abstract saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void>;
+
+  // ===== JOB DESCRIPTIONS / ONBOARDING =====
+  abstract getJobDescriptions(): Promise<JobDescription[]>;
+  abstract saveJobDescriptions(jobs: JobDescription[]): Promise<void>;
+  abstract getOnboardingTasks(): Promise<LegacyOnboardingTask[]>;
+  abstract getOnboardingTemplates(): Promise<OnboardingTemplate[]>;
 
   // ===== DEPARTMENTS & DESIGNATIONS =====
   abstract getDepartments(): Promise<Department[]>;

@@ -312,32 +312,82 @@ export function serializeEmployee(emp: Employee): any[] {
 }
 
 export function deserializeEmployee(row: any[]): Employee {
+  const legacyRow = row || [];
+
+  // Backward compatibility with legacy/simple row format used in some tests and imports:
+  // [id, name, email, phone, role]
+  if (legacyRow.length > 0 && legacyRow.length <= 5) {
+    const [id = '', name = '', email = '', phone = '', role = ''] = legacyRow;
+    return {
+      id,
+      name,
+      email,
+      phone,
+      status: 'Active',
+      role,
+      department: '',
+      personal: {
+        name,
+        email,
+        phone,
+      },
+      employment: {
+        joiningDate: '',
+        status: 'Active',
+        seatNumber: 0,
+        role: (role as any) || undefined,
+      },
+      compensation: {
+        currency: 'USD',
+        salaryStructure: {},
+        salaryHistory: [],
+      },
+      onboarding: {
+        contractSigned: false,
+        trainingAssigned: false,
+        trainingCompleted: false,
+        welcomeEmailSent: false,
+        feedbackSubmitted: false,
+        tasksStatus: {},
+        tasksCompleted: [],
+      },
+      exit: null,
+      journeyTimeline: [],
+      education: [],
+      certifications: [],
+      previousEmployers: [],
+    } as Employee;
+  }
+
   const expectedLength = EMPLOYEE_HEADERS.length;
   if (!row || row.length < expectedLength) {
-    row = [...(row || []), ...Array(expectedLength - (row ? row.length : 0)).fill("")];
+    row = [...(row || []), ...Array(expectedLength - (row ? row.length : 0)).fill('')];
   }
 
   const data = parseRow(row, EMPLOYEE_HEADERS);
   const getBool = (val: any) => String(val).toUpperCase() === 'TRUE';
-  
-  const id = data.id || "";
-  const name = data.name || "";
-  const email = data.email || "";
-  const status = (data.status as any) || "Active";
+
+  const id = data.id || '';
+  const name = data.name || '';
+  const email = data.email || '';
+  const phone = data.phone || '';
+  const status = (data.status as any) || 'Active';
+  const role = data.role || data.designationId || '';
 
   return {
     id,
     name,
     email,
+    phone,
     status,
-    role: data.designationId || undefined,
-    department: data.departmentId || undefined,
+    role,
+    department: data.departmentId || '',
     baseSalary: parseJson(data.salaryStructureJson, {}).totalMonthly || undefined,
 
     personal: {
       name,
       email,
-      phone: data.phone || undefined,
+      phone,
       cnic: data.cnic || undefined,
       cnicFrontImage: data.cnicFrontImage || undefined,
       cnicBackImage: data.cnicBackImage || undefined,
@@ -366,7 +416,7 @@ export function deserializeEmployee(row: any[]): Employee {
       profileImage: data.profileImage || undefined,
     },
     employment: {
-      joiningDate: data.joiningDate || "",
+      joiningDate: data.joiningDate || '',
       status,
       seatNumber: Number(data.seatNumber) || 0,
       grade: data.grade || undefined,
@@ -403,7 +453,7 @@ export function deserializeEmployee(row: any[]): Employee {
       salaryStructure: parseJson(data.salaryStructureJson, {}),
       salaryHistory: parseJson(data.salaryHistoryJson, []),
       payGradeId: data.payGradeId || undefined,
-      currency: data.currency || "USD",
+      currency: data.currency || 'USD',
     },
     onboarding: {
       contractSigned: getBool(data.contractSigned),
@@ -413,15 +463,17 @@ export function deserializeEmployee(row: any[]): Employee {
       feedbackSubmitted: getBool(data.feedbackSubmitted),
       templateId: data.onboardingTemplateId || undefined,
       tasksStatus: parseJson(data.onboardingTasksStatus, {}),
-      tasksCompleted: data.onboardingTasksCompleted ? data.onboardingTasksCompleted.split(",").filter(Boolean) : [],
+      tasksCompleted: data.onboardingTasksCompleted ? data.onboardingTasksCompleted.split(',').filter(Boolean) : [],
     },
-    exit: data.exitResignationAccepted ? {
-      resignationAccepted: getBool(data.exitResignationAccepted),
-      assetHandover: getBool(data.exitAssetHandover),
-      ndaRenewed: getBool(data.exitNdaRenewed),
-      finalSettlement: getBool(data.exitFinalSettlement),
-      exitInterview: getBool(data.exitExitInterview),
-    } : null,
+    exit: data.exitResignationAccepted
+      ? {
+          resignationAccepted: getBool(data.exitResignationAccepted),
+          assetHandover: getBool(data.exitAssetHandover),
+          ndaRenewed: getBool(data.exitNdaRenewed),
+          finalSettlement: getBool(data.exitFinalSettlement),
+          exitInterview: getBool(data.exitExitInterview),
+        }
+      : null,
     mentorId: data.mentorId || undefined,
     mentorName: data.mentorName || undefined,
     journeyTimeline: parseJson(data.journeyTimelineJson, []),
@@ -448,19 +500,19 @@ export function serializeAttendance(att: AttendanceRecord): any[] {
 export function deserializeAttendance(row: any[]): AttendanceRecord {
   const expectedLength = ATTENDANCE_HEADERS.length;
   if (!row || row.length < expectedLength) {
-    row = [...(row || []), ...Array(expectedLength - (row ? row.length : 0)).fill("")];
+    row = [...(row || []), ...Array(expectedLength - (row ? row.length : 0)).fill('')];
   }
   const data = parseRow(row, ATTENDANCE_HEADERS);
   return {
-    id: data.id || "",
-    employeeId: data.employeeId || "",
-    employeeName: data.employeeName || "",
-    date: data.date || "",
-    checkIn: data.checkIn || undefined,
-    checkOut: data.checkOut || undefined,
+    id: data.id || '',
+    employeeId: data.employeeId || '',
+    employeeName: data.employeeName || '',
+    date: data.date || '',
+    checkIn: data.checkIn || '',
+    checkOut: data.checkOut || '',
     lateMinutes: Number(data.lateMinutes) || 0,
     earlyDepartureMinutes: Number(data.earlyDepartureMinutes) || 0,
-    status: (data.status as any) || "Full Day"
+    status: (data.status as any) || 'Full Day',
   };
 }
 

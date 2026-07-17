@@ -12,7 +12,7 @@ const localStorageMock = {
 global.localStorage = localStorageMock as any;
 
 // Mock fetch
-global.fetch = jest.fn();
+global.fetch = jest.fn() as any;
 
 // Mock console to keep test output clean
 console.error = jest.fn();

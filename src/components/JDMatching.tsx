@@ -31,7 +31,7 @@ export default function JDMatching() {
     
     // For this JD, find all candidates that are in Applied state (or all, for demo)
     // We'll just match all candidates for now
-    const newMatches = candidates.map(c => calculateMatch(c, jd));
+    const newMatches = candidates.map(c => calculateMatch(jd, c));
     
     // Merge new matches with existing
     let updatedMatches = [...matches];

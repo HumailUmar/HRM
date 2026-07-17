@@ -20,7 +20,10 @@ import {
   StageTemplate,
   InterviewPanel,
   EvaluationScorecard,
-  JDResumeMatch
+  JDResumeMatch,
+  JobDescription,
+  LegacyOnboardingTask,
+  OnboardingTemplate,
 } from '../../types';
 
 export interface IDataAdapter {
@@ -71,9 +74,12 @@ export interface IDataAdapter {
   saveDocument(document: EmployeeDocument): Promise<void>;
   getEmployeeDocuments(): Promise<EmployeeDocument[]>;
   saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void>;
-  
+
+  // JOB DESCRIPTIONS / ONBOARDING
   getJobDescriptions(): Promise<JobDescription[]>;
   saveJobDescriptions(jobs: JobDescription[]): Promise<void>;
+  getOnboardingTasks(): Promise<LegacyOnboardingTask[]>;
+  getOnboardingTemplates(): Promise<OnboardingTemplate[]>;
 
   // DEPARTMENTS & DESIGNATIONS
   getDepartments(): Promise<Department[]>;
@@ -102,7 +108,7 @@ export interface IDataAdapter {
     notes?: string
   ): any;
   uploadFile(file: File, folderId: string): Promise<string>;
-  
+
   // RECRUITMENT HELPERS
   getStageTemplates(): Promise<StageTemplate[]>;
   saveStageTemplates(templates: StageTemplate[]): Promise<void>;
@@ -112,17 +118,13 @@ export interface IDataAdapter {
   saveScorecards(scorecards: EvaluationScorecard[]): Promise<void>;
   getJDMatches(): Promise<JDResumeMatch[]>;
   saveJDMatches(matches: JDResumeMatch[]): Promise<void>;
-  
+
   // HISTORY & EXIT
   addEmployeeHistory(entry: EmployeeHistoryEntry): Promise<void>;
   getEmployeeHistory(employeeId: string): Promise<EmployeeHistoryEntry[]>;
   createExitRecord(record: ExitRecord): Promise<void>;
   getExitRecords(): Promise<ExitRecord[]>;
-  
-  // ONBOARDING
-  getOnboardingTasks(): Promise<LegacyOnboardingTask[]>;
-  getOnboardingTemplates(): Promise<OnboardingTemplate[]>;
-  
+
   // EXIT TEMPLATES
   getExitChecklistTemplates(): Promise<ExitChecklistTemplate[]>;
   getExitInterviewTemplates(): Promise<ExitInterviewTemplate[]>;

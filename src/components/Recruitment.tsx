@@ -1375,6 +1375,8 @@ export default function Recruitment({
                       activeScreeningTab === 'voice' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
+                    AI Voice Call
+                  </button>
                   <button
                     onClick={() => setActiveScreeningTab('scorecard')}
                     className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
@@ -1382,8 +1384,6 @@ export default function Recruitment({
                     }`}
                   >
                     Scorecard
-                  </button>
-                    AI Voice Call
                   </button>
                 </div>
               </div>

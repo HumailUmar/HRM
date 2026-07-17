@@ -41,7 +41,7 @@ const ManagerPortal = lazy(() => import('./components/ManagerPortal'));
 
 import { getToken, getUser, setAuthData, clearAuthData, isAuthenticated, hasToken, googleSignIn, logout } from './lib/auth';
 import { Employee, AttendanceRecord, Candidate, PayrollRecord, AppSettings, LeaveRecord, LegacyOnboardingTask, OnboardingTemplate, Department, Designation, EmployeeDocument, JobDescription } from './types';
-import { getDataAdapter } from './services';
+import { getSettings as loadStoredSettings } from './lib/storage';
 
 // ===== NEW MAPPING: connects sidebar tab IDs to portal sections =====
 const portalSectionMap: Record<string, { portal: 'employee' | 'manager', section: string }> = {
@@ -85,7 +85,7 @@ export default function App() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({ isMockMode: true });
+  const [settings, setSettings] = useState<AppSettings>(() => loadStoredSettings());
   const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
   const [onboardingTasks, setOnboardingTasks] = useState<LegacyOnboardingTask[]>([]);
   const [onboardingTemplates, setOnboardingTemplates] = useState<OnboardingTemplate[]>([]);
@@ -137,7 +137,7 @@ export default function App() {
   const handleSyncAll = async () => {
     setIsLoadingGSheet(true);
     try {
-      await data.sync();
+      await data.syncAll();
       // Re-load all data after sync to ensure consistency
       const [emps, att, pay, levs, depts, desigs, docs, tasks, tmpls, jobs, cands] = await Promise.all([
         data.getEmployees(),

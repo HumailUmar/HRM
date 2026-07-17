@@ -59,10 +59,16 @@ import {
   CURRENCY_HEADERS,
   TAX_RULE_HEADERS,
   STATUTORY_DEDUCTION_HEADERS,
-  // getEmployees
-  // getAttendance
-  // getLeaves
-  // getPayroll
+  getEmployees as getEmployeesFromLocalStore,
+  saveEmployees as saveEmployeesToLocalStore,
+  getAttendance as getAttendanceFromLocalStore,
+  saveAttendance as saveAttendanceToLocalStore,
+  getLeaves as getLeavesFromLocalStore,
+  saveLeaves as saveLeavesToLocalStore,
+  getPayroll as getPayrollFromLocalStore,
+  savePayroll as savePayrollToLocalStore,
+  getCandidates as getCandidatesFromLocalStore,
+  saveCandidates as saveCandidatesToLocalStore,
   getSalaryStructureByEmployee,
   getPayGrades,
   saveSalaryStructure,
@@ -90,8 +96,35 @@ if (!process.env.GEMINI_API_KEY) {
   console.warn("⚠️ WARNING: GEMINI_API_KEY is not defined. AI-powered features will be disabled.");
 }
 
-const app = express();
+export const app = express();
 const PORT = 3000;
+
+const isNoDatabaseConfiguredError = (error: unknown): boolean => {
+  return error instanceof Error && error.message.includes('No database configured');
+};
+
+async function getEmployeesStore() {
+  try {
+    return await getEmployeesFromDB();
+  } catch (error) {
+    if (isNoDatabaseConfiguredError(error)) {
+      return getEmployeesFromLocalStore();
+    }
+    throw error;
+  }
+}
+
+async function saveEmployeesStore(employees: any[]) {
+  try {
+    await saveEmployeesToDB(employees);
+  } catch (error) {
+    if (isNoDatabaseConfiguredError(error)) {
+      saveEmployeesToLocalStore(employees);
+      return;
+    }
+    throw error;
+  }
+}
 
 // ===== CORS CONFIGURATION =====
 // Define allowed origins based on environment
@@ -483,7 +516,7 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
     }
 
     // Find or create employee
-    const employees = await getEmployeesFromDB();
+    const employees = await getEmployeesStore();
     let employee = employees.find(e => e.email === email || e.personal?.email === email);
     if (!employee) {
       // Create new employee with default role 'Employee', or 'Admin' if it's the owner/user email
@@ -525,7 +558,7 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
         email
       } as any;
       employees.push(employee);
-      await saveEmployeesToDB(employees);
+      await saveEmployeesStore(employees);
     }
 
     // Determine role from employee record (server-side)
@@ -577,7 +610,7 @@ app.use('/api/v1', apiLimiter);
 // GET /api/v1/employees
 app.get('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req: any, res: any) => {
   try {
-    const employees = await getEmployeesFromDB();
+    const employees = await getEmployeesStore();
     res.json({
       success: true,
       data: employees,
@@ -591,7 +624,7 @@ app.get('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin', 'Manag
 // GET /api/v1/employees/:id
 app.get('/api/v1/employees/:id', authenticateToken, authorize(['HR', 'Admin', 'Manager', 'Employee']), async (req: any, res: any) => {
   try {
-    const employee = (await getEmployeesFromDB()).find(e => e.id === req.params.id);
+    const employee = (await getEmployeesStore()).find(e => e.id === req.params.id);
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
 
     if (req.user.role === 'Employee' && req.user.employeeId !== req.params.id) {
@@ -611,7 +644,7 @@ app.post('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin']), asy
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
     
-    const employees = await getEmployeesFromDB();
+    const employees = await getEmployeesStore();
     const newId = await getNextId('employee', 'EMP-');
     const newEmployee = {
       id: newId,
@@ -620,7 +653,7 @@ app.post('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin']), asy
       updatedAt: new Date().toISOString()
     };
     employees.push(newEmployee);
-    await saveEmployeesToDB(employees);
+    await saveEmployeesStore(employees);
 
     // Create a default salary structure for the new employee
     const defaultStructure = getSalaryStructureByEmployee(newEmployee.id, newEmployee.baseSalary || 0);
@@ -649,7 +682,7 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
 
-    const employees = await getEmployeesFromDB();
+    const employees = await getEmployeesStore();
     const index = employees.findIndex(e => e.id === req.params.id);
     if (index === -1) {
       return res.status(404).json({ error: 'Employee not found' });
@@ -683,7 +716,7 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
       updatedAt: new Date().toISOString() 
     };
 
-    await saveEmployeesToDB(employees);
+    await saveEmployeesStore(employees);
     res.json({ success: true, data: employees[index] });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -820,7 +853,7 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
     }
 
     const { month, year } = validation.data;
-    const employees = await getEmployeesFromDB();
+    const employees = await getEmployeesStore();
     const attendance = await getAttendanceFromDB();
     const payrollRecords: any[] = [];
     
