@@ -28,6 +28,8 @@ import {
   serializeHire, deserializeHire,
   serializeInterviewSchedule, deserializeInterviewSchedule,
   serializeWhatsAppMessage, deserializeWhatsAppMessage,
+  EMPLOYEE_HEADERS, ATTENDANCE_HEADERS, PAYROLL_HEADERS, LEAVES_HEADERS,
+  RECRUITMENT_HEADERS, DEPARTMENT_HEADERS, DESIGNATION_HEADERS, DOCUMENTS_HEADERS
 } from '../lib/storage';
 import {
   readSheet,
@@ -45,6 +47,9 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   private localFallback = new LocalStorageAdapter();
 
   constructor(settings: AppSettings) {
+    if (!settings?.googleSheets?.spreadsheetId) {
+      throw new Error('GoogleSheetsAdapter requires settings.googleSheets.spreadsheetId');
+    }
     this.spreadsheetId = settings.googleSheets.spreadsheetId;
     this.settings = settings;
   }
@@ -65,7 +70,6 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getEmployees(): Promise<Employee[]> {
     try {
       const rows = await readSheet('HumailEli_Employees', 'A2:CZ');
-      if (rows.length === 0) return this.localFallback.getEmployees();
       return rows.map(deserializeEmployee);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -86,23 +90,7 @@ export class GoogleSheetsAdapter implements IDataAdapter {
 
   async saveEmployees(employees: Employee[]): Promise<void> {
     try {
-      const headers = ['id', 'name', 'email', 'phone', 'role', 'department', 'baseSalary', 'joiningDate', 'status', 'seatNumber',
-        'contractSigned', 'trainingAssigned', 'trainingCompleted', 'welcomeEmailSent', 'feedbackSubmitted',
-        'trainerName', 'trainingRating', 'trainingComments',
-        'exitResignationAccepted', 'exitAssetHandover', 'exitNdaRenewed', 'exitFinalSettlement', 'exitExitInterview',
-        'potentialRating', 'readiness', 'mentorId', 'mentorName', 'journeyTimelineJson',
-        'onboardingTemplateId', 'onboardingTasksStatus', 'onboardingTasksCompleted',
-        'cnic', 'cnicFrontImage', 'cnicBackImage', 'passportNumber', 'passportExpiry', 'nationality', 'religion',
-        'dateOfBirth', 'gender', 'maritalStatus', 'bloodGroup', 'personalEmail', 'workEmail', 'phonePersonal', 'phoneWork',
-        'currentAddress', 'permanentAddress', 'city', 'state', 'country', 'postalCode',
-        'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelationship',
-        'linkedinUrl', 'githubUrl', 'otherSocialUrls', 'profileImage',
-        'educationJson', 'certificationsJson', 'previousEmployersJson',
-        'grade', 'jobCategory', 'employmentType', 'contractStartDate', 'contractEndDate',
-        'isProbation', 'probationEndDate', 'confirmationDate', 'workLocation', 'shift',
-        'costCenter', 'reportingManagerId', 'hrBusinessPartnerId', 'payrollGroup',
-        'departmentId', 'designationId', 'punchCode'
-      ];
+      const headers = EMPLOYEE_HEADERS;
       const rows = employees.map(serializeEmployee);
       await updateSheet('HumailEli_Employees', 'A1', [headers, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
@@ -120,7 +108,6 @@ export class GoogleSheetsAdapter implements IDataAdapter {
     try {
       const sheetName = this.settings.googleSheets.attendanceSheet || 'HumailEli_Attendance';
       const rows = await readSheet(sheetName, 'A2:I');
-      if (rows.length === 0) return this.localFallback.getAttendance();
       return rows.map(deserializeAttendance);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -133,9 +120,8 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async saveAttendance(records: AttendanceRecord[]): Promise<void> {
     try {
       const sheetName = this.settings.googleSheets.attendanceSheet || 'HumailEli_Attendance';
-      const headers = ['id', 'employeeId', 'employeeName', 'date', 'checkIn', 'checkOut', 'lateMinutes', 'earlyDepartureMinutes', 'status'];
       const rows = records.map(serializeAttendance);
-      await updateSheet(sheetName, 'A1', [headers, ...rows]);
+      await updateSheet(sheetName, 'A1', [ATTENDANCE_HEADERS, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -154,7 +140,6 @@ export class GoogleSheetsAdapter implements IDataAdapter {
     try {
       const sheetName = this.settings.googleSheets.payrollSheet || 'HumailEli_Payroll';
       const rows = await readSheet(sheetName, 'A2:K');
-      if (rows.length === 0) return this.localFallback.getPayroll();
       return rows.map(deserializePayroll);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -167,9 +152,8 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async savePayroll(records: PayrollRecord[]): Promise<void> {
     try {
       const sheetName = this.settings.googleSheets.payrollSheet || 'HumailEli_Payroll';
-      const headers = ['id', 'employeeId', 'employeeName', 'month', 'baseSalary', 'bonus', 'penalty', 'leaveDeductions', 'netSalary', 'status', 'calculatedAt'];
       const rows = records.map(serializePayroll);
-      await updateSheet(sheetName, 'A1', [headers, ...rows]);
+      await updateSheet(sheetName, 'A1', [PAYROLL_HEADERS, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -180,7 +164,6 @@ export class GoogleSheetsAdapter implements IDataAdapter {
     try {
       const sheetName = this.settings.googleSheets.leaveSheet || 'HumailEli_Leaves';
       const rows = await readSheet(sheetName, 'A2:J');
-      if (rows.length === 0) return this.localFallback.getLeaves();
       return rows.map(deserializeLeave);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -201,9 +184,8 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async saveLeaves(records: LeaveRecord[]): Promise<void> {
     try {
       const sheetName = this.settings.googleSheets.leaveSheet || 'HumailEli_Leaves';
-      const headers = ['id', 'employeeId', 'employeeName', 'leaveType', 'startDate', 'endDate', 'reason', 'status', 'approvedBy', 'approvedAt'];
       const rows = records.map(serializeLeave);
-      await updateSheet(sheetName, 'A1', [headers, ...rows]);
+      await updateSheet(sheetName, 'A1', [LEAVES_HEADERS, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -213,7 +195,6 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getCandidates(): Promise<Candidate[]> {
     try {
       const rows = await readSheet('HumailEli_Recruitment', 'A2:O');
-      if (rows.length === 0) return this.localFallback.getCandidates();
       return rows.map(deserializeCandidate);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -228,10 +209,8 @@ export class GoogleSheetsAdapter implements IDataAdapter {
 
   async saveCandidates(candidates: Candidate[]): Promise<void> {
     try {
-      const headers = ['id', 'name', 'email', 'phone', 'skills', 'experienceYears', 'resumeFileName', 'status',
-        'screeningTotalScore', 'whatsappSent', 'chatbotScore', 'videoScore', 'combinedScore', 'chatbotTranscript', 'videoUrl'];
       const rows = candidates.map(serializeCandidate);
-      await updateSheet('HumailEli_Recruitment', 'A1', [headers, ...rows]);
+      await updateSheet('HumailEli_Recruitment', 'A1', [RECRUITMENT_HEADERS, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -241,7 +220,6 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getDepartments(): Promise<Department[]> {
     try {
       const rows = await readSheet('HumailEli_Departments', 'A2:N');
-      if (rows.length === 0) return this.localFallback.getDepartments();
       return rows.map(deserializeDepartment);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -256,16 +234,14 @@ export class GoogleSheetsAdapter implements IDataAdapter {
 
   async saveDepartments(depts: Department[]): Promise<void> {
     try {
-      const headers = ['id', 'name', 'code', 'description', 'headId', 'headName', 'parentDepartmentId', 'location', 'budget', 'costCenter', 'employeeCount', 'isActive', 'createdAt', 'updatedAt'];
       const rows = depts.map(serializeDepartment);
-      await updateSheet('HumailEli_Departments', 'A1', [headers, ...rows]);
+      await updateSheet('HumailEli_Departments', 'A1', [DEPARTMENT_HEADERS, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
   async getDesignations(): Promise<Designation[]> {
     try {
       const rows = await readSheet('HumailEli_Designations', 'A2:M');
-      if (rows.length === 0) return this.localFallback.getDesignations();
       return rows.map(deserializeDesignation);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -280,9 +256,8 @@ export class GoogleSheetsAdapter implements IDataAdapter {
 
   async saveDesignations(designations: Designation[]): Promise<void> {
     try {
-      const headers = ['id', 'name', 'code', 'description', 'departmentId', 'level', 'category', 'reportingToDesignationId', 'minSalary', 'maxSalary', 'isActive', 'createdAt', 'updatedAt'];
       const rows = designations.map(serializeDesignation);
-      await updateSheet('HumailEli_Designations', 'A1', [headers, ...rows]);
+      await updateSheet('HumailEli_Designations', 'A1', [DESIGNATION_HEADERS, ...rows]);
     } catch (e: any) {
       logger.error('GoogleSheetsAdapter write failed for designations; data NOT persisted:', e?.message);
       throw e;
@@ -295,7 +270,6 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getDocuments(): Promise<EmployeeDocument[]> {
     try {
       const rows = await readSheet('HumailEli_Employee_Documents', 'A2:W');
-      if (rows.length === 0) return this.localFallback.getDocuments();
       return rows.map(deserializeEmployeeDocument);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
@@ -310,9 +284,8 @@ export class GoogleSheetsAdapter implements IDataAdapter {
 
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
     try {
-      const headers = ['id', 'employeeId', 'employeeName', 'documentType', 'documentTypeLabel', 'fileName', 'fileSize', 'fileType', 'fileUrl', 'driveFileId', 'uploadedBy', 'uploadedByName', 'uploadedAt', 'isVerified', 'verifiedBy', 'verifiedByName', 'verifiedAt', 'expiryDate', 'notes', 'tags', 'version', 'parentDocumentId', 'status'];
       const rows = docs.map(serializeEmployeeDocument);
-      await updateSheet('HumailEli_Employee_Documents', 'A1', [headers, ...rows]);
+      await updateSheet('HumailEli_Employee_Documents', 'A1', [DOCUMENTS_HEADERS, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { 
   getActiveBiometricDevice, 
   getBiometricPunchRecords, 
@@ -15,8 +15,11 @@ import { BiometricSyncLog } from '../types';
 export function useBiometricSync() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const isSyncingRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     const activeDevice = getActiveBiometricDevice();
     if (!activeDevice || !activeDevice.isActive) return;
 
@@ -25,7 +28,10 @@ export function useBiometricSync() {
     const intervalMs = (activeDevice.syncInterval || DEFAULT_SYNC_INTERVAL_MINS) * MS_PER_MINUTE;
 
     const performSync = async () => {
-      setIsSyncing(true);
+      if (isSyncingRef.current) return;
+      isSyncingRef.current = true;
+      if (mountedRef.current) setIsSyncing(true);
+
       const startTime = new Date().toISOString();
       const log: BiometricSyncLog = {
         id: `SYNC-AUTO-${Date.now()}`,
@@ -46,7 +52,6 @@ export function useBiometricSync() {
         await adapter.connect(activeDevice);
         const result = await adapter.syncAttendance();
 
-        // Guard: ensure records is an array
         if (!result || typeof result !== 'object') {
           throw new Error(`Invalid response from device: expected object, got ${typeof result}`);
         }
@@ -59,8 +64,6 @@ export function useBiometricSync() {
         }
 
         const existingRecords = getBiometricPunchRecords();
-        
-        // Only save non-mock records to storage
         const realRecords = result.records.filter(r => !r.mock);
         const existingRealRecords = existingRecords.filter(r => !r.mock);
 
@@ -82,14 +85,13 @@ export function useBiometricSync() {
         if (logs.length > 100) logs.length = 100;
         saveBiometricSyncLogs(logs);
 
-        // Update active device's lastSync in storage
         const devices = getBiometricDevices();
         const updatedDevices = devices.map(d => 
           d.id === activeDevice.id ? { ...d, lastSync: new Date().toISOString() } : d
         );
         saveBiometricDevices(updatedDevices);
 
-        setLastSync(new Date().toISOString());
+        if (mountedRef.current) setLastSync(new Date().toISOString());
       } catch (error: any) {
         console.error('Biometric sync failed:', error);
         log.status = 'failed';
@@ -101,15 +103,18 @@ export function useBiometricSync() {
         if (logs.length > 100) logs.length = 100;
         saveBiometricSyncLogs(logs);
       } finally {
-        setIsSyncing(false);
+        isSyncingRef.current = false;
+        if (mountedRef.current) setIsSyncing(false);
       }
     };
 
-    // Initial sync and set interval
     performSync();
     const interval = setInterval(performSync, intervalMs);
 
-    return () => clearInterval(interval);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []);
 
   return { isSyncing, lastSync };

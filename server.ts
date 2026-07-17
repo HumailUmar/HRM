@@ -226,7 +226,7 @@ async function fetchFromDevice(url: string, options: any = {}) {
   if (apiKey) {
     headers['Authorization'] = `Bearer ${apiKey}`;
   } else if (username || password) {
-    headers['Authorization'] = `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`;
+    headers['Authorization'] = buildDeviceAuthHeader(apiKey, username, password);
   }
 
   return fetchWithRetry(url, {
@@ -1412,6 +1412,14 @@ function isUrlSafe(urlString: string): boolean {
   }
 }
 
+function buildDeviceAuthHeader(apiKey?: string, username?: string, password?: string): string {
+  if (apiKey) return `Bearer ${apiKey}`;
+  if (!username || !password) {
+    throw new Error('Device username and password are required when apiKey is not provided');
+  }
+  return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+}
+
 // Video Analysis endpoint (simulated / multimodal evaluation)
 // POST /api/evaluate-video – analyze a candidate's video interview
 app.post('/api/evaluate-video', async (req: any, res: any) => {
@@ -2084,16 +2092,21 @@ app.post('/api/biometric/test', authenticateToken, authorize(['Admin', 'HR']), a
       });
     }
 
-    // Here you would implement actual device-specific testing
-    // For now, return simulated success
+    // Validate required config fields for device testing
+    if (!config?.host) {
+      return res.status(400).json({
+        success: false,
+        error: 'Device host is required in config for testing'
+      });
+    }
+
     res.json({
       success: true,
-      message: `Connection to ${deviceType} device successful`,
-      deviceInfo: {
-        model: `${deviceType} Model X`,
-        firmware: '2.1.0',
-        serialNumber: 'DEV-001',
-        totalUsers: 25
+      message: `Biometric device configuration accepted for ${deviceType}. Use the device-specific test endpoint (e.g., /api/zkteco/test) for actual connectivity verification.`,
+      deviceType,
+      config: {
+        host: config.host,
+        port: config.port || 80
       }
     });
   } catch (error: any) {
@@ -2239,9 +2252,7 @@ app.post('/api/zkteco/test', authenticateToken, authorize(['Admin', 'HR']), asyn
         const rawUrl = `http://${host}:${port || 80}${endpoint.path}`;
       if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
       const url = rawUrl;
-        const authHeader = apiKey 
-          ? `Bearer ${apiKey}`
-          : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`;
+        const authHeader = buildDeviceAuthHeader(apiKey, username, password);
 
         const response = await fetchWithRetry(
           url,
@@ -2371,7 +2382,7 @@ app.post('/api/zkteco/users', authenticateToken, authorize(['Admin', 'HR']), asy
       url,
       {
         headers: {
-          'Authorization': apiKey ? `Bearer ${apiKey}` : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`,
+          'Authorization': buildDeviceAuthHeader(apiKey, username, password),
           'Content-Type': 'application/json'
         },
         timeout: DEFAULT_TIMEOUT_MS
@@ -2431,7 +2442,7 @@ app.post('/api/zkteco/sync-users', authenticateToken, authorize(['Admin', 'HR'])
       {
         method: 'POST',
         headers: {
-          'Authorization': apiKey ? `Bearer ${apiKey}` : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`,
+          'Authorization': buildDeviceAuthHeader(apiKey, username, password),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ users: employees.map((e: any) => ({ id: e.id, name: e.name })) }),
@@ -2448,11 +2459,20 @@ app.post('/api/zkteco/sync-users', authenticateToken, authorize(['Admin', 'HR'])
     );
 
     const data = await response.json() as Record<string, any>;
-    res.json({
-      success: true,
-      synced: data.synced || employees.length,
-      failed: data.failed || 0
-    });
+    if (response.ok) {
+      res.json({
+        success: true,
+        synced: data.synced || employees.length,
+        failed: data.failed || 0
+      });
+    } else {
+      res.status(response.status).json({
+        success: false,
+        synced: 0,
+        failed: employees.length,
+        error: data.error || data.message || 'Device rejected sync request'
+      });
+    }
   } catch (error: any) {
     console.error('ZKTeco sync users error:', error);
     res.status(500).json({
@@ -2487,9 +2507,7 @@ app.post('/api/biostar/test', authenticateToken, authorize(['Admin', 'HR']), asy
         const rawUrl = `http://${host}:${port || 80}${endpoint.path}`;
       if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
       const url = rawUrl;
-        const authHeader = apiKey 
-          ? `Bearer ${apiKey}`
-          : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`;
+        const authHeader = buildDeviceAuthHeader(apiKey, username, password);
 
         const response = await fetchWithRetry(
           url,
@@ -2588,7 +2606,7 @@ app.post('/api/biostar/users', authenticateToken, authorize(['Admin', 'HR']), as
       url,
       {
         headers: {
-          'Authorization': apiKey ? `Bearer ${apiKey}` : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`,
+          'Authorization': buildDeviceAuthHeader(apiKey, username, password),
           'Content-Type': 'application/json'
         },
         timeout: DEFAULT_TIMEOUT_MS
@@ -2632,7 +2650,7 @@ app.post('/api/biostar/sync-users', authenticateToken, authorize(['Admin', 'HR']
       {
         method: 'POST',
         headers: {
-          'Authorization': apiKey ? `Bearer ${apiKey}` : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`,
+          'Authorization': buildDeviceAuthHeader(apiKey, username, password),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ users: employees.map((e: any) => ({ id: e.id, name: e.name })) }),
@@ -2656,10 +2674,12 @@ app.post('/api/biostar/sync-users', authenticateToken, authorize(['Admin', 'HR']
         failed: data.failed || 0
       });
     } else {
-      res.json({
-        success: true,
-        synced: employees.length,
-        failed: 0
+      const data = await response.json().catch(() => ({}));
+      res.status(response.status).json({
+        success: false,
+        synced: 0,
+        failed: employees.length,
+        error: data.error || data.message || 'Device rejected sync request'
       });
     }
   } catch (error: any) {
@@ -2683,7 +2703,7 @@ app.post('/api/hikvision/test', authenticateToken, authorize(['Admin', 'HR']), a
       const url = rawUrl;
     const authHeader = apiKey 
       ? `Bearer ${apiKey}`
-      : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`;
+      : buildDeviceAuthHeader(apiKey, username, password);
 
     let errors: string[] = [];
 
@@ -2800,7 +2820,7 @@ app.post('/api/hikvision/users', authenticateToken, authorize(['Admin', 'HR']), 
       {
         method: 'POST',
         headers: {
-          'Authorization': apiKey ? `Bearer ${apiKey}` : `Basic ${Buffer.from(`${username || 'admin'}:${password || ''}`).toString('base64')}`,
+          'Authorization': buildDeviceAuthHeader(apiKey, username, password),
           'Content-Type': 'application/xml'
         },
         body: `<UserInfoSearchCond><searchID>1</searchID><maxResults>100</maxResults></UserInfoSearchCond>`,
@@ -2841,12 +2861,55 @@ app.post('/api/hikvision/users', authenticateToken, authorize(['Admin', 'HR']), 
 // POST /api/hikvision/sync-users - Sync employees to Hikvision
 app.post('/api/hikvision/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
-    const { employees } = req.body;
-    res.json({
-      success: true,
-      synced: employees.length,
-      failed: 0
-    });
+    const { host, port, username, password, apiKey, employees } = req.body;
+    
+    if (!host) {
+      return res.status(400).json({
+        success: false,
+        error: 'Device host/IP is required'
+      });
+    }
+
+    const rawUrl = `http://${host}:${port || 80}/ISAPI/AccessControl/UserInfo/addUser`;
+    if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
+    const url = rawUrl;
+    const response = await fetchWithRetry(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': buildDeviceAuthHeader(apiKey, username, password),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ users: employees.map((e: any) => ({ id: e.id, name: e.name })) }),
+        timeout: 15000
+      },
+      {
+        maxRetries: 2,
+        baseDelay: 1000,
+        retryableStatuses: [429, 500, 502, 503, 504],
+        onRetry: (attempt, error) => {
+          console.warn(`Hikvision sync users retry ${attempt}: ${error.message}`);
+        }
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json() as Record<string, any>;
+      res.json({
+        success: true,
+        synced: data.synced || employees.length,
+        failed: data.failed || 0
+      });
+    } else {
+      const data = await response.json().catch(() => ({}));
+      res.status(response.status).json({
+        success: false,
+        synced: 0,
+        failed: employees.length,
+        error: data.error || data.message || 'Device rejected sync request'
+      });
+    }
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -3090,10 +3153,12 @@ app.post('/api/generic/sync-users', authenticateToken, authorize(['Admin', 'HR']
         failed: data.failed || 0
       });
     } else {
-      res.json({
-        success: true,
-        synced: employees.length,
-        failed: 0
+      const data = await response.json().catch(() => ({}));
+      res.status(response.status).json({
+        success: false,
+        synced: 0,
+        failed: employees.length,
+        error: data.error || data.message || 'Device rejected sync request'
       });
     }
   } catch (error: any) {
