@@ -27,6 +27,8 @@ import { Pool } from 'pg';
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { lookup } from "dns/promises";
+import net from "net";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createServer as createViteServer } from "vite";
@@ -192,7 +194,7 @@ app.use(cors(corsOptions));
 // For preflight requests, respond with 204 (No Content)
 app.options('*', cors(corsOptions) as any);
 
-app.use(express.json({ limit: '200mb' }));
+app.use(express.json({ limit: '2mb', verify: (req: any, _res, buffer) => { req.rawBody = buffer; } }));
 app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
 // ===== INPUT VALIDATION SCHEMAS =====
@@ -244,6 +246,9 @@ if (process.env.NODE_ENV === 'production' && !GOOGLE_CLIENT_ID) {
   throw new Error('GOOGLE_CLIENT_ID environment variable is required in production');
 }
 const AUTH_COOKIE = 'hrm_session';
+const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const WHATSAPP_WEBHOOK_SECRET = process.env.WHATSAPP_WEBHOOK_SECRET;
 
 // ===== BIOMETRIC DEVICE INTEGRATION HELPERS =====
 
@@ -459,6 +464,15 @@ const apiLimiter = rateLimit({
   max: 100, // 100 requests per minute
   message: { error: 'Too many requests, please try again later.' }
 });
+
+// AI processing is expensive; bound request bursts independently of CRUD APIs.
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many AI requests, please try again later.' },
+});
+let activeVideoAnalyses = 0;
+const MAX_CONCURRENT_VIDEO_ANALYSES = 2;
 
 // API Key validation middleware
 const validateApiKey = (req, res, next) => {
@@ -714,6 +728,10 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
 
+    const updateData = isHRorAdmin ? { ...req.body } as any : { ...(validation.data as any) } as any;
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'At least one permitted field is required' });
+    }
     const employees = await getEmployeesStore();
     const index = employees.findIndex(e => e.id === req.params.id);
     if (index === -1) {
@@ -721,7 +739,6 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
     }
 
     const existingEmployee = employees[index];
-    const updateData = { ...req.body } as any;
 
     // Prevent non-HR/Admin from changing role
     if (!isHRorAdmin) {
@@ -1339,7 +1356,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // Chatbot screening endpoint: handles dynamic screening chat
-app.post("/api/chat-screen", authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
+app.post("/api/chat-screen", aiLimiter, authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { messages, candidateName, candidateRole, candidateExperience } = req.body;
 
@@ -1426,7 +1443,7 @@ Focus on assessing if they fit the technical expectations of the role. Do not ex
 });
 
 // Chatbot evaluation endpoint: evaluates chat transcript and outputs a scorecard score
-app.post("/api/evaluate-transcript", authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
+app.post("/api/evaluate-transcript", aiLimiter, authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { transcript, candidateName, candidateRole } = req.body;
 
@@ -1570,9 +1587,37 @@ function buildDeviceAuthHeader(apiKey?: string, username?: string, password?: st
   return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 }
 
+// User-supplied media must never reach private infrastructure. Device routes use
+// isUrlSafe separately because managed biometric hardware can live on a LAN.
+function isPrivateAddress(address: string): boolean {
+  if (net.isIP(address) === 4) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a === 169 && b === 254 ||
+      a === 192 && b === 168 || a === 172 && b >= 16 && b <= 31;
+  }
+  const normalized = address.toLowerCase();
+  return normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:');
+}
+
+async function isPublicVideoUrl(urlString: string): Promise<boolean> {
+  if (!isUrlSafe(urlString)) return false;
+  try {
+    const hostname = new URL(urlString).hostname;
+    if (net.isIP(hostname)) return !isPrivateAddress(hostname);
+    // Resolve every record before connecting so a hostname resolving into the
+    // private network cannot bypass the URL-level checks.
+    const addresses = await lookup(hostname, { all: true, verbatim: true });
+    return addresses.length > 0 && addresses.every(({ address }) => !isPrivateAddress(address));
+  } catch { return false; }
+}
+
 // Video Analysis endpoint (simulated / multimodal evaluation)
 // POST /api/evaluate-video – analyze a candidate's video interview
-app.post('/api/evaluate-video', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req: any, res: any) => {
+app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req: any, res: any) => {
+  if (activeVideoAnalyses >= MAX_CONCURRENT_VIDEO_ANALYSES) {
+    return res.status(429).json({ success: false, error: 'Video analysis capacity is busy; retry shortly.' });
+  }
+  activeVideoAnalyses += 1;
   try {
     const { videoUrl, candidateName, candidateRole } = req.body;
 
@@ -1587,7 +1632,7 @@ app.post('/api/evaluate-video', authenticateToken, authorize(['HR', 'Admin', 'Ma
     const isInlineDataUrl = typeof videoUrl === 'string' && videoUrl.startsWith('data:video/');
 
     // SECURITY: Validate URL safety (SSRF Protection) for remote URLs only
-    if (!isInlineDataUrl && !isUrlSafe(videoUrl)) {
+    if (!isInlineDataUrl && !(await isPublicVideoUrl(videoUrl))) {
       return res.status(403).json({ 
         success: false, 
         error: 'URL is not allowed (must be public HTTP/HTTPS, no internal IPs)' 
@@ -1634,7 +1679,7 @@ app.post('/api/evaluate-video', authenticateToken, authorize(['HR', 'Admin', 'Ma
         }
       }
 
-      if (!isUrlSafe(videoUrlForAI)) {
+      if (!(await isPublicVideoUrl(videoUrlForAI))) {
         return res.status(403).json({ 
           success: false, 
           error: 'Final transformed URL is not allowed' 
@@ -1677,6 +1722,10 @@ app.post('/api/evaluate-video', authenticateToken, authorize(['HR', 'Admin', 'Ma
         });
       }
 
+      const remoteMimeType = response.headers.get('content-type') || '';
+      if (!remoteMimeType.toLowerCase().startsWith('video/')) {
+        return res.status(415).json({ success: false, error: 'Remote URL did not return a video content type' });
+      }
       if (!response.body) {
         return res.status(400).json({
           success: false,
@@ -1778,19 +1827,30 @@ Return your response as a JSON object with keys: score, summary, rating.
       success: false, 
       error: error.message || 'Failed to analyze video. Please try again later.' 
     });
+  } finally {
+    activeVideoAnalyses = Math.max(0, activeVideoAnalyses - 1);
   }
 });
 
-// WhatsApp webhook endpoint (Event Handler)
-app.post("/api/whatsapp/webhook", (req, res) => {
-  console.log("Received WhatsApp webhook:", JSON.stringify(req.body, null, 2));
+// WhatsApp webhook endpoint. Verify Meta's HMAC before accepting delivery events.
+app.post("/api/whatsapp/webhook", (req: any, res) => {
+  if (!WHATSAPP_WEBHOOK_SECRET) {
+    return res.status(503).json({ error: 'WhatsApp webhook verification is not configured' });
+  }
+  const signature = req.get('x-hub-signature-256') || '';
+  const expected = `sha256=${crypto.createHmac('sha256', WHATSAPP_WEBHOOK_SECRET).update(req.rawBody || '').digest('hex')}`;
+  const valid = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  if (!valid) return res.status(401).json({ error: 'Invalid webhook signature' });
+  // Do not log raw webhook content: it may contain PII and message text.
   res.sendStatus(200);
 });
 
 // WhatsApp send message endpoint
-app.post("/api/whatsapp/send", authenticateToken, async (req, res) => {
+app.post("/api/whatsapp/send", authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const { phoneNumberId, accessToken, to, templateName, components } = req.body;
+    const { to, templateName, components } = req.body;
+    const phoneNumberId = WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = WHATSAPP_ACCESS_TOKEN;
 
     // 1. Validate required fields
     if (!phoneNumberId) {
@@ -1880,8 +1940,7 @@ app.post("/api/whatsapp/send", authenticateToken, async (req, res) => {
       success: true,
       messageId: messageIds[0],
       messageIds: messageIds,
-      conversationId: data.conversation_id || undefined,
-      meta: data, // optional: include full response for debugging
+      conversationId: data.conversation_id || undefined
     });
 
   } catch (error: any) {

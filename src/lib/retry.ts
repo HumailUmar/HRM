@@ -20,6 +20,8 @@ export interface CircuitState {
   failures: number;
   lastFailureTime: number;
   successInHalfOpen: number;
+  /** Only one request may probe a half-open dependency at a time. */
+  halfOpenProbeInFlight: boolean;
   state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 }
 
@@ -31,6 +33,7 @@ export function getCircuitState(key: string): CircuitState {
       failures: 0,
       lastFailureTime: 0,
       successInHalfOpen: 0,
+      halfOpenProbeInFlight: false,
       state: 'CLOSED',
     });
   }
@@ -44,13 +47,16 @@ function isCircuitOpen(key: string, config?: CircuitBreakerConfig): boolean {
   if (state.state === 'OPEN') {
     const timeout = Number.isFinite(config.timeout) && config.timeout > 0 ? config.timeout : 60000;
     const elapsed = Date.now() - state.lastFailureTime;
-    if (elapsed > timeout) {
-      // Allow a single probe by entering HALF_OPEN.
-      state.state = 'HALF_OPEN';
-      state.successInHalfOpen = 0;
-      return false;
-    }
-    return true;
+    if (elapsed <= timeout) return true;
+    // Enter half-open and reserve the sole recovery probe.
+    state.state = 'HALF_OPEN';
+    state.successInHalfOpen = 0;
+    state.halfOpenProbeInFlight = true;
+    return false;
+  }
+  if (state.state === 'HALF_OPEN') {
+    if (state.halfOpenProbeInFlight) return true;
+    state.halfOpenProbeInFlight = true;
   }
   return false;
 }
@@ -67,12 +73,16 @@ function recordSuccess(key: string, config?: CircuitBreakerConfig): void {
     if (state.successInHalfOpen >= threshold) {
       state.failures = 0;
       state.successInHalfOpen = 0;
+      state.halfOpenProbeInFlight = false;
       state.state = 'CLOSED';
+    } else {
+      state.halfOpenProbeInFlight = false;
     }
     return;
   }
 
   state.failures = 0;
+  state.halfOpenProbeInFlight = false;
   state.state = 'CLOSED';
 }
 
@@ -84,6 +94,7 @@ function recordFailure(key: string, config?: CircuitBreakerConfig): void {
     state.state = 'OPEN';
     state.lastFailureTime = Date.now();
     state.successInHalfOpen = 0;
+    state.halfOpenProbeInFlight = false;
     return;
   }
   state.failures++;
@@ -91,6 +102,7 @@ function recordFailure(key: string, config?: CircuitBreakerConfig): void {
 
   if (state.failures >= config.failureThreshold) {
     state.state = 'OPEN';
+    state.halfOpenProbeInFlight = false;
   }
 }
 
@@ -154,7 +166,8 @@ export async function fetchWithRetry(
           await sleep(delay);
           continue;
         }
-        // If we're out of retries, return the response (it will be handled as an error)
+        // An exhausted retryable HTTP response is a dependency failure too.
+        if (circuitBreaker) recordFailure(circuitKey, circuitBreaker);
         return response;
       }
       
