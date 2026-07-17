@@ -401,8 +401,7 @@ export default function Recruitment({
           messages: updatedMessages,
           candidateName: candidate.name,
           candidateRole: candidate.skills[0] || "Specialist",
-          candidateExperience: candidate.experienceYears,
-          apiKey: settings.ai.apiKey
+          candidateExperience: candidate.experienceYears
         })
       });
 
@@ -454,12 +453,11 @@ export default function Recruitment({
     try {
       const response = await fetch("/api/evaluate-transcript", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders('json'),
         body: JSON.stringify({
           transcript: fullTranscript,
           candidateName: candidate.name,
-          candidateRole: candidate.skills[0] || "Specialist",
-          apiKey: settings.ai.apiKey
+          candidateRole: candidate.skills[0] || "Specialist"
         })
       });
 
@@ -538,12 +536,11 @@ export default function Recruitment({
           // Call evaluate-video
           const res = await fetch("/api/evaluate-video", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: getAuthHeaders('json'),
             body: JSON.stringify({
               videoUrl: base64Video,
               candidateName: candidate.name,
-              candidateRole: candidate.skills[0] || "Specialist",
-              apiKey: settings.ai?.apiKey
+              candidateRole: candidate.skills[0] || "Specialist"
             })
           });
 

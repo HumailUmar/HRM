@@ -27,6 +27,8 @@ import { Pool } from 'pg';
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { lookup } from "dns/promises";
+import net from "net";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createServer as createViteServer } from "vite";
@@ -127,67 +129,63 @@ async function saveEmployeesStore(employees: any[]) {
 }
 
 // ===== CORS CONFIGURATION =====
-// Define allowed origins based on environment
-const allowedOrigins = (() => {
-  // Base origins that are always allowed to prevent locking out local dev or the AI Studio preview
-  const baseOrigins = [
-    'http://localhost:3000',
-    'http://localhost:5173', // Vite default
-    'http://127.0.0.1:5173',
-    'http://localhost:3001', // Common alternative ports
-    '*.run.app',             // Cloud Run apps (including AI Studio preview)
-    '*.google.com',          // Google domains
-    '*.github.dev',          // GitHub codespaces
-  ];
+// ALLOWED_ORIGINS accepts a comma-separated list of absolute origins. Wildcards
+// are deliberately limited to a complete subdomain label, e.g.
+// https://*.example.com. A bare "*" is never accepted with credentials.
+const parseAllowedOrigins = (raw: string | undefined): string[] => {
+  if (!raw) return [];
+  return raw.split(',').map(value => value.trim()).filter(value => {
+    if (!value || value === '*') {
+      console.warn('Ignoring insecure CORS origin entry:', value || '(empty)');
+      return false;
+    }
+    const candidate = value.replace('://*.', '://placeholder.');
+    try {
+      const parsed = new URL(candidate);
+      const validWildcard = /^https?:\/\/\*\.[a-z0-9.-]+(?::\d+)?$/i.test(value);
+      const validExact = /^https?:\/\/[^/]+$/i.test(value);
+      if (!validExact && !validWildcard || parsed.pathname !== '/') throw new Error('invalid origin');
+      return true;
+    } catch {
+      console.warn('Ignoring invalid CORS origin entry:', value);
+      return false;
+    }
+  });
+};
 
-  // Production origins from environment variable (comma-separated)
-  const prodOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : [];
+const allowedOrigins = [
+  ...parseAllowedOrigins(process.env.ALLOWED_ORIGINS),
+  ...(process.env.NODE_ENV === 'production' ? [] : [
+    'http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://127.0.0.1:5173'
+  ])
+];
 
-  return [...baseOrigins, ...prodOrigins];
-})();
+const originMatches = (origin: string, allowed: string): boolean => {
+  if (origin === allowed) return true;
+  const wildcard = allowed.match(/^(https?):\/\/\*\.([^/:]+)(?::(\d+))?$/i);
+  if (!wildcard) return false;
+  try {
+    const request = new URL(origin);
+    const [, protocol, domain, port] = wildcard;
+    // Require a real subdomain boundary: evil-example.com must not match example.com.
+    return request.protocol === `${protocol}:` && request.hostname.endsWith(`.${domain}`) &&
+      request.hostname !== domain && (port ? request.port === port : !request.port);
+  } catch { return false; }
+};
 
 const corsOptions: cors.CorsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests with no origin (like mobile apps, curl, etc.) only in development
-    if (!origin) {
-      if (process.env.NODE_ENV === 'production') {
-        // In production, reject requests with no origin (unless you have a specific use case)
-        return callback(new Error('Origin not allowed by CORS policy'));
-      }
-      return callback(null, true);
-    }
-
-    // Check if origin is in the allowed list
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-      return callback(null, true);
-    }
-
-    // Check if origin matches a wildcard pattern (e.g., *.example.com)
-    const isWildcardMatch = allowedOrigins.some(allowed => {
-      if (allowed.startsWith('*.')) {
-        const domain = allowed.slice(2);
-        return origin.endsWith(domain);
-      }
-      return false;
-    });
-
-    if (isWildcardMatch) {
-      return callback(null, true);
-    }
-
-    // Log denied origin for debugging (in development only)
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn(`CORS denied for origin: ${origin}`);
-    }
-    callback(new Error('Origin not allowed by CORS policy'));
+  origin: (origin, callback) => {
+    if (!origin) return process.env.NODE_ENV === 'production'
+      ? callback(new Error('Origin not allowed by CORS policy')) : callback(null, true);
+    if (allowedOrigins.some(allowed => originMatches(origin, allowed))) return callback(null, true);
+    if (process.env.NODE_ENV !== 'production') console.warn(`CORS denied for origin: ${origin}`);
+    return callback(new Error('Origin not allowed by CORS policy'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Requested-With'],
   exposedHeaders: ['X-Total-Count', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
-  credentials: true, // Allow cookies/auth headers to be sent
-  maxAge: 86400, // Cache preflight for 24 hours
+  credentials: true,
+  maxAge: 86400,
 };
 
 // Apply CORS middleware
@@ -196,7 +194,7 @@ app.use(cors(corsOptions));
 // For preflight requests, respond with 204 (No Content)
 app.options('*', cors(corsOptions) as any);
 
-app.use(express.json({ limit: '200mb' }));
+app.use(express.json({ limit: '2mb', verify: (req: any, _res, buffer) => { req.rawBody = buffer; } }));
 app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
 // ===== INPUT VALIDATION SCHEMAS =====
@@ -241,7 +239,16 @@ if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
 const DEFAULT_TIMEOUT_MS = 10000;
 const AVERAGE_WORKING_DAYS = 22;
 
-const ACTUAL_JWT_SECRET = JWT_SECRET || 'humail_eli_secret_key_2026';
+const ACTUAL_JWT_SECRET = JWT_SECRET || (process.env.NODE_ENV === 'test' ? 'humail_eli_secret_key_2026' : crypto.randomBytes(32).toString('hex'));
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean));
+if (process.env.NODE_ENV === 'production' && !GOOGLE_CLIENT_ID) {
+  throw new Error('GOOGLE_CLIENT_ID environment variable is required in production');
+}
+const AUTH_COOKIE = 'hrm_session';
+const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const WHATSAPP_WEBHOOK_SECRET = process.env.WHATSAPP_WEBHOOK_SECRET;
 
 // ===== BIOMETRIC DEVICE INTEGRATION HELPERS =====
 
@@ -317,7 +324,10 @@ function transformPunchRecord(punch: any, index: number, deviceId: string, devic
 
 const authenticateToken = (req: any, res: any, next: any) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const bearerToken = authHeader && authHeader.split(' ')[1];
+  const cookieToken = String(req.headers.cookie || '').split(';').map((value: string) => value.trim())
+    .find((value: string) => value.startsWith(`${AUTH_COOKIE}=`))?.slice(AUTH_COOKIE.length + 1);
+  const token = bearerToken || cookieToken;
 
   // If no JWT, fallback to API key
   if (!token) {
@@ -455,6 +465,15 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' }
 });
 
+// AI processing is expensive; bound request bursts independently of CRUD APIs.
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many AI requests, please try again later.' },
+});
+let activeVideoAnalyses = 0;
+const MAX_CONCURRENT_VIDEO_ANALYSES = 2;
+
 // API Key validation middleware
 const validateApiKey = (req, res, next) => {
   const apiKey = req.headers['x-api-key'] || req.query.apiKey;
@@ -520,20 +539,25 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
     }
 
     const googleTokenInfo: any = await googleResponse.json();
-    const email = googleTokenInfo.email;
-    const name = googleTokenInfo.name || googleTokenInfo.given_name || googleTokenInfo.email || 'Unknown User';
-    const picture = googleTokenInfo.picture || '';
-
-    if (!email) {
-      return res.status(401).json({ error: 'Google token is missing email claim' });
+    const email = typeof googleTokenInfo.email === 'string' ? googleTokenInfo.email.toLowerCase() : '';
+    const now = Math.floor(Date.now() / 1000);
+    // tokeninfo validates the signature. Validate the claims that bind that token to
+    // this application before using any identity data from it.
+    const validIssuer = googleTokenInfo.iss === 'accounts.google.com' || googleTokenInfo.iss === 'https://accounts.google.com';
+    const validAudience = !!GOOGLE_CLIENT_ID && (googleTokenInfo.aud === GOOGLE_CLIENT_ID || googleTokenInfo.azp === GOOGLE_CLIENT_ID);
+    const validExpiry = Number(googleTokenInfo.exp) > now;
+    if (!email || googleTokenInfo.email_verified !== 'true' && googleTokenInfo.email_verified !== true || !validIssuer || !validAudience || !validExpiry) {
+      return res.status(401).json({ error: 'Google ID token claims could not be verified' });
     }
+    const name = googleTokenInfo.name || googleTokenInfo.given_name || email || 'Unknown User';
+    const picture = googleTokenInfo.picture || '';
 
     // Find or create employee
     const employees = await getEmployeesStore();
     let employee = employees.find(e => e.email === email || e.personal?.email === email);
     if (!employee) {
       // Create new employee with default role 'Employee', or 'Admin' if it's the owner/user email
-      const isUserEmail = email === 'hmufk1@gmail.com';
+      const isUserEmail = ADMIN_EMAILS.has(email);
       const role = isUserEmail ? 'Admin' : 'Employee';
 
       employee = {
@@ -584,9 +608,17 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
       { expiresIn: '24h' }
     );
 
-    // Return token and user info
+    // Keep the session credential out of JavaScript-accessible storage.
+    res.cookie(AUTH_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    // Return only non-sensitive user information.
     res.json({
-      token,
       user: {
         employeeId: employee.id,
         email,
@@ -611,6 +643,7 @@ app.get('/api/v1/auth/verify', authenticateToken, (req: any, res: any) => {
 
 // POST /api/v1/auth/logout – No-op (client-side clear)
 app.post('/api/v1/auth/logout', (req: any, res: any) => {
+  res.clearCookie(AUTH_COOKIE, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
   res.json({ success: true });
 });
 
@@ -695,6 +728,10 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
 
+    const updateData = isHRorAdmin ? { ...req.body } as any : { ...(validation.data as any) } as any;
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'At least one permitted field is required' });
+    }
     const employees = await getEmployeesStore();
     const index = employees.findIndex(e => e.id === req.params.id);
     if (index === -1) {
@@ -702,7 +739,6 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
     }
 
     const existingEmployee = employees[index];
-    const updateData = { ...req.body } as any;
 
     // Prevent non-HR/Admin from changing role
     if (!isHRorAdmin) {
@@ -1044,6 +1080,8 @@ app.post('/api/admin/circuit-breaker/reset', authenticateToken, authorize(['Admi
     if (state) {
       state.state = 'CLOSED';
       state.failures = 0;
+      state.successInHalfOpen = 0;
+      state.halfOpenProbeInFlight = false;
       res.json({ success: true, message: `Circuit breaker for ${service} reset` });
     } else {
       res.json({ success: false, message: `Service ${service} not found` });
@@ -1054,6 +1092,8 @@ app.post('/api/admin/circuit-breaker/reset', authenticateToken, authorize(['Admi
       const state = circuitStates.get(key)!;
       state.state = 'CLOSED';
       state.failures = 0;
+      state.successInHalfOpen = 0;
+      state.halfOpenProbeInFlight = false;
     }
     res.json({ success: true, message: 'All circuit breakers reset' });
   }
@@ -1320,9 +1360,9 @@ app.get("/api/health", (req, res) => {
 });
 
 // Chatbot screening endpoint: handles dynamic screening chat
-app.post("/api/chat-screen", authenticateToken, async (req, res) => {
+app.post("/api/chat-screen", aiLimiter, authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
-    const { messages, candidateName, candidateRole, candidateExperience, apiKey } = req.body;
+    const { messages, candidateName, candidateRole, candidateExperience } = req.body;
 
     // 1. Validate required fields
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -1350,7 +1390,7 @@ app.post("/api/chat-screen", authenticateToken, async (req, res) => {
     }
 
     // 3. Use server API key if not provided by client
-    const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
+    const effectiveKey = process.env.GEMINI_API_KEY;
     if (!effectiveKey) {
       return res.status(501).json({ 
         error: "Gemini API key not configured on server or request. Please add GEMINI_API_KEY in Settings." 
@@ -1358,7 +1398,7 @@ app.post("/api/chat-screen", authenticateToken, async (req, res) => {
     }
 
     // 4. Initialize Gemini client
-    const ai = apiKey ? new GoogleGenerativeAI(apiKey) : getGeminiClient();
+    const ai = getGeminiClient();
     const experience = candidateExperience || "some";
     const model = ai.getGenerativeModel({ 
       model: 'gemini-1.5-flash',
@@ -1407,18 +1447,18 @@ Focus on assessing if they fit the technical expectations of the role. Do not ex
 });
 
 // Chatbot evaluation endpoint: evaluates chat transcript and outputs a scorecard score
-app.post("/api/evaluate-transcript", async (req, res) => {
+app.post("/api/evaluate-transcript", aiLimiter, authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
-    const { transcript, candidateName, candidateRole, apiKey } = req.body;
+    const { transcript, candidateName, candidateRole } = req.body;
 
-    const effectiveKey = apiKey || process.env.GEMINI_API_KEY;
+    const effectiveKey = process.env.GEMINI_API_KEY;
     if (!effectiveKey) {
       return res.status(501).json({ 
         error: "Gemini API key not configured. Using simulated scores." 
       });
     }
 
-    const ai = apiKey ? new GoogleGenerativeAI(apiKey) : getGeminiClient();
+    const ai = getGeminiClient();
     const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const evaluationPrompt = `Analyze the following interview screening transcript between our AI Recruiter and candidate ${candidateName} for the role of ${candidateRole}.
@@ -1551,9 +1591,37 @@ function buildDeviceAuthHeader(apiKey?: string, username?: string, password?: st
   return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 }
 
+// User-supplied media must never reach private infrastructure. Device routes use
+// isUrlSafe separately because managed biometric hardware can live on a LAN.
+function isPrivateAddress(address: string): boolean {
+  if (net.isIP(address) === 4) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a === 169 && b === 254 ||
+      a === 192 && b === 168 || a === 172 && b >= 16 && b <= 31;
+  }
+  const normalized = address.toLowerCase();
+  return normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:');
+}
+
+async function isPublicVideoUrl(urlString: string): Promise<boolean> {
+  if (!isUrlSafe(urlString)) return false;
+  try {
+    const hostname = new URL(urlString).hostname;
+    if (net.isIP(hostname)) return !isPrivateAddress(hostname);
+    // Resolve every record before connecting so a hostname resolving into the
+    // private network cannot bypass the URL-level checks.
+    const addresses = await lookup(hostname, { all: true, verbatim: true });
+    return addresses.length > 0 && addresses.every(({ address }) => !isPrivateAddress(address));
+  } catch { return false; }
+}
+
 // Video Analysis endpoint (simulated / multimodal evaluation)
 // POST /api/evaluate-video – analyze a candidate's video interview
-app.post('/api/evaluate-video', async (req: any, res: any) => {
+app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req: any, res: any) => {
+  if (activeVideoAnalyses >= MAX_CONCURRENT_VIDEO_ANALYSES) {
+    return res.status(429).json({ success: false, error: 'Video analysis capacity is busy; retry shortly.' });
+  }
+  activeVideoAnalyses += 1;
   try {
     const { videoUrl, candidateName, candidateRole } = req.body;
 
@@ -1568,7 +1636,7 @@ app.post('/api/evaluate-video', async (req: any, res: any) => {
     const isInlineDataUrl = typeof videoUrl === 'string' && videoUrl.startsWith('data:video/');
 
     // SECURITY: Validate URL safety (SSRF Protection) for remote URLs only
-    if (!isInlineDataUrl && !isUrlSafe(videoUrl)) {
+    if (!isInlineDataUrl && !(await isPublicVideoUrl(videoUrl))) {
       return res.status(403).json({ 
         success: false, 
         error: 'URL is not allowed (must be public HTTP/HTTPS, no internal IPs)' 
@@ -1615,7 +1683,7 @@ app.post('/api/evaluate-video', async (req: any, res: any) => {
         }
       }
 
-      if (!isUrlSafe(videoUrlForAI)) {
+      if (!(await isPublicVideoUrl(videoUrlForAI))) {
         return res.status(403).json({ 
           success: false, 
           error: 'Final transformed URL is not allowed' 
@@ -1658,6 +1726,10 @@ app.post('/api/evaluate-video', async (req: any, res: any) => {
         });
       }
 
+      const remoteMimeType = response.headers.get('content-type') || '';
+      if (!remoteMimeType.toLowerCase().startsWith('video/')) {
+        return res.status(415).json({ success: false, error: 'Remote URL did not return a video content type' });
+      }
       if (!response.body) {
         return res.status(400).json({
           success: false,
@@ -1759,19 +1831,30 @@ Return your response as a JSON object with keys: score, summary, rating.
       success: false, 
       error: error.message || 'Failed to analyze video. Please try again later.' 
     });
+  } finally {
+    activeVideoAnalyses = Math.max(0, activeVideoAnalyses - 1);
   }
 });
 
-// WhatsApp webhook endpoint (Event Handler)
-app.post("/api/whatsapp/webhook", (req, res) => {
-  console.log("Received WhatsApp webhook:", JSON.stringify(req.body, null, 2));
+// WhatsApp webhook endpoint. Verify Meta's HMAC before accepting delivery events.
+app.post("/api/whatsapp/webhook", (req: any, res) => {
+  if (!WHATSAPP_WEBHOOK_SECRET) {
+    return res.status(503).json({ error: 'WhatsApp webhook verification is not configured' });
+  }
+  const signature = req.get('x-hub-signature-256') || '';
+  const expected = `sha256=${crypto.createHmac('sha256', WHATSAPP_WEBHOOK_SECRET).update(req.rawBody || '').digest('hex')}`;
+  const valid = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  if (!valid) return res.status(401).json({ error: 'Invalid webhook signature' });
+  // Do not log raw webhook content: it may contain PII and message text.
   res.sendStatus(200);
 });
 
 // WhatsApp send message endpoint
-app.post("/api/whatsapp/send", authenticateToken, async (req, res) => {
+app.post("/api/whatsapp/send", authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const { phoneNumberId, accessToken, to, templateName, components } = req.body;
+    const { to, templateName, components } = req.body;
+    const phoneNumberId = WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = WHATSAPP_ACCESS_TOKEN;
 
     // 1. Validate required fields
     if (!phoneNumberId) {
@@ -1861,8 +1944,7 @@ app.post("/api/whatsapp/send", authenticateToken, async (req, res) => {
       success: true,
       messageId: messageIds[0],
       messageIds: messageIds,
-      conversationId: data.conversation_id || undefined,
-      meta: data, // optional: include full response for debugging
+      conversationId: data.conversation_id || undefined
     });
 
   } catch (error: any) {
@@ -2335,7 +2417,7 @@ app.get('/api/biometric/status', authenticateToken, authorize(['Admin', 'HR']), 
 // POST /api/ai/test - Test connection to AI provider
 app.post('/api/ai/test', authenticateToken, async (req, res) => {
   try {
-    const { provider, apiKey, endpoint } = req.body;
+    const { provider } = req.body;
     
     if (!provider || provider === 'none') {
       return res.status(400).json({
@@ -2344,18 +2426,13 @@ app.post('/api/ai/test', authenticateToken, async (req, res) => {
       });
     }
 
-    if (!apiKey) {
-      return res.status(400).json({
-        success: false,
-        error: 'API key is required for testing'
-      });
+    if (provider !== 'gemini') {
+      return res.status(400).json({ success: false, error: 'Only the server-configured Gemini provider is supported.' });
     }
-
-    // Simulate verification
-    res.json({
-      success: true,
-      message: `✅ Connection successful! Authenticated with ${provider === 'gemini' ? 'Google Gemini' : provider === 'anthropic' ? 'Anthropic Claude' : provider === 'openai' ? 'OpenAI GPT' : 'Custom Endpoint'} successfully.`
-    });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'Gemini is not configured on this server.' });
+    }
+    res.json({ success: true, message: 'Gemini is configured on the server.' });
   } catch (error: any) {
     console.error('AI test error:', error);
     res.status(500).json({

@@ -2,7 +2,6 @@ import { logger } from './logger';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { jwtDecode } from 'jwt-decode';
 
 export const GOOGLE_WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -10,9 +9,10 @@ export const GOOGLE_WORKSPACE_SCOPES = [
 ];
 
 let authInstance: any = null;
-const TOKEN_KEY = 'hrm_access_token';
-const USER_KEY = 'hrm_user';
-const GOOGLE_ACCESS_TOKEN_KEY = 'hrm_google_access_token';
+// Credentials live in a Secure, HttpOnly session cookie set by the server.
+// Only non-secret profile data is kept in memory for the current tab.
+let currentUser: AuthUser | null = null;
+let googleAccessToken: string | null = null;
 
 export interface AuthUser {
   employeeId: string;
@@ -35,51 +35,22 @@ const getFirebaseAuth = () => {
   }
 };
 
-export function setAuthData(token: string, user: AuthUser, googleAccessToken?: string | null) {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-  if (googleAccessToken) {
-    localStorage.setItem(GOOGLE_ACCESS_TOKEN_KEY, googleAccessToken);
-  }
+export function setAuthData(_token: string, user: AuthUser, accessToken?: string | null) {
+  currentUser = user;
+  googleAccessToken = accessToken || null;
 }
 
 export function clearAuthData() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(GOOGLE_ACCESS_TOKEN_KEY);
+  currentUser = null;
+  googleAccessToken = null;
 }
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function getGoogleAccessToken(): string | null {
-  return localStorage.getItem(GOOGLE_ACCESS_TOKEN_KEY);
-}
-
-export function getAccessToken(): string | null {
-  return getGoogleAccessToken();
-}
-
-export function getUser(): AuthUser | null {
-  const token = getToken();
-  if (!token) return null;
-
-  const data = localStorage.getItem(USER_KEY);
-  if (!data) {
-    try {
-      return jwtDecode<AuthUser>(token);
-    } catch {
-      return null;
-    }
-  }
-
-  try {
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-}
+// JWTs are intentionally not readable from JavaScript. The browser sends the
+// HttpOnly cookie automatically for same-origin API requests.
+export function getToken(): string | null { return null; }
+export function getGoogleAccessToken(): string | null { return googleAccessToken; }
+export function getAccessToken(): string | null { return googleAccessToken; }
+export function getUser(): AuthUser | null { return currentUser; }
 
 export function getAuthHeaders(contentType: 'json' | 'none' = 'json'): Record<string, string> {
   const token = getToken();
@@ -90,12 +61,10 @@ export function getAuthHeaders(contentType: 'json' | 'none' = 'json'): Record<st
 }
 
 export async function verifySession(): Promise<AuthUser | null> {
-  const token = getToken();
-  if (!token) return null;
-
   try {
     const response = await fetch('/api/v1/auth/verify', {
-      headers: getAuthHeaders('none'),
+      headers: { ...getAuthHeaders('none') },
+      credentials: 'same-origin',
     });
 
     if (!response.ok) {
@@ -110,8 +79,8 @@ export async function verifySession(): Promise<AuthUser | null> {
       return null;
     }
 
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-    return user as AuthUser;
+    currentUser = user as AuthUser;
+    return currentUser;
   } catch (error) {
     logger.warn('Session verification failed:', error);
     return getUser();
@@ -123,7 +92,7 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export function hasToken(): boolean {
-  return localStorage.getItem(TOKEN_KEY) !== null;
+  return currentUser !== null;
 }
 
 export const googleSignIn = async (): Promise<{ user: AuthUser; token: string } | null> => {
@@ -162,13 +131,13 @@ export const googleSignIn = async (): Promise<{ user: AuthUser; token: string } 
       throw new Error(responseBody?.error || responseBody?.message || 'Login failed');
     }
 
-    const { token, user } = responseBody || {};
-    if (!token || !user) {
-      throw new Error('Login response is missing token or user payload');
+    const { user } = responseBody || {};
+    if (!user) {
+      throw new Error('Login response is missing user payload');
     }
 
-    setAuthData(token, user, googleAccessToken);
-    return { token, user };
+    setAuthData('', user, googleAccessToken);
+    return { token: '', user };
   } catch (error) {
     logger.error('Google sign in failure:', error);
     clearAuthData();
@@ -191,7 +160,8 @@ export const logout = async () => {
   try {
     await fetch('/api/v1/auth/logout', {
       method: 'POST',
-      headers: getAuthHeaders('none'),
+      headers: { ...getAuthHeaders('none') },
+      credentials: 'same-origin',
     });
   } catch {
     // Ignore logout transport errors.

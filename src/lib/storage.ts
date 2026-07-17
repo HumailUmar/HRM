@@ -1234,7 +1234,12 @@ export const saveJDMatches = (matches: JDResumeMatch[]) => {
 };
 
 export const getSettings = (): AppSettings => {
-  const loaded = loadData<any>('settings', DEFAULT_SETTINGS);
+  const persisted = loadData<any>('settings', DEFAULT_SETTINGS);
+  const loaded = withoutSecrets(persisted);
+  // Remove credentials written by older versions as soon as settings are read.
+  if (JSON.stringify(persisted) !== JSON.stringify(loaded)) {
+    saveData<AppSettings>('settings', loaded);
+  }
   try {
     const result = SettingsSchema.safeParse(loaded);
     if (result.success) {
@@ -1248,7 +1253,16 @@ export const getSettings = (): AppSettings => {
     return DEFAULT_SETTINGS;
   }
 };
-export const saveSettings = (data: AppSettings) => saveData<AppSettings>('settings', data);
+// Settings are persisted for UI behavior only. Credentials must be provisioned
+// server-side; never write them to localStorage (including legacy settings).
+const withoutSecrets = <T>(value: T): T => {
+  if (Array.isArray(value)) return value.map(withoutSecrets) as T;
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !/(?:api[_-]?key|access[_-]?token|verify[_-]?token|password|secret|username)$/i.test(key))
+    .map(([key, child]) => [key, withoutSecrets(child)])) as T;
+};
+export const saveSettings = (data: AppSettings) => saveData<AppSettings>('settings', withoutSecrets(data));
 
 export const getPerformanceReviewTemplates = (): PerformanceReviewTemplate[] => {
   return loadData<PerformanceReviewTemplate[]>('performance_review_templates', DEFAULT_PERFORMANCE_TEMPLATES);
