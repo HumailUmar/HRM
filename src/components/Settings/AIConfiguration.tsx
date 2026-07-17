@@ -6,6 +6,7 @@ import {
   Globe, Cpu, BarChart3
 } from 'lucide-react';
 import { getSettings, saveSettings } from '../../lib/storage';
+import { getAuthHeaders } from '../../lib/auth';
 import { AppSettings } from '../../types';
 
 interface AIConfigurationProps {
@@ -150,7 +151,7 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
     try {
       const response = await fetch('/api/ai/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders('json'),
         body: JSON.stringify({ provider, apiKey, endpoint: customEndpoint })
       });
       const data = await response.json();

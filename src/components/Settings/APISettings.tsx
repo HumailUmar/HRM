@@ -1,5 +1,6 @@
 import { logger } from '../../lib/logger';
 import React, { useState, useEffect } from 'react';
+import { getAuthHeaders } from '../../lib/auth';
 import { Key, Copy, CheckCircle, AlertCircle, RefreshCw, Lock, Globe, FileText, Plus } from 'lucide-react';
 
 interface ApiKey {
@@ -21,7 +22,7 @@ export default function APISettings() {
 
   const fetchKeys = async () => {
     try {
-      const response = await fetch('/api/v1/api-keys');
+      const response = await fetch('/api/v1/api-keys', { headers: getAuthHeaders('none') });
       const data = await response.json();
       if (data.success) {
         setApiKeys(data.data);
@@ -46,7 +47,7 @@ export default function APISettings() {
     try {
       const response = await fetch('/api/v1/api-keys/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders('json'),
         body: JSON.stringify({ name: newKeyName.trim() })
       });
       const data = await response.json();
@@ -75,7 +76,7 @@ export default function APISettings() {
   const handleRevokeKey = async (key: string) => {
     if (!confirm(`Are you sure you want to revoke this API key?`)) return;
     try {
-      const response = await fetch(`/api/v1/api-keys/${key}`, { method: 'DELETE' });
+      const response = await fetch(`/api/v1/api-keys/${key}`, { method: 'DELETE', headers: getAuthHeaders('none') });
       const data = await response.json();
       if (data.success) {
         setApiKeys(apiKeys.filter(k => k.key !== key));

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getSettings, saveSettings } from '@/src/lib/storage';
+import { getAuthHeaders } from '@/src/lib/auth';
 import { refreshDataAdapter } from '@/src/services';
 import { 
   Cloud, CheckCircle, AlertCircle, RefreshCw, 
@@ -45,7 +46,7 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
     { name: 'HumailEli_Payroll', description: 'Monthly payroll calculations and salary records' },
     { name: 'HumailEli_Leaves', description: 'Leave requests, balances, and approvals' },
     { name: 'HumailEli_Recruitment', description: 'Candidate pipeline and recruitment data' },
-    { name: 'HumailEli_Documents', description: 'Employee documents and verification status' },
+    { name: 'HumailEli_Employee_Documents', description: 'Employee documents and verification status' },
     { name: 'HumailEli_Departments', description: 'Department structure and hierarchy' },
     { name: 'HumailEli_Designations', description: 'Job titles, levels, and categories' },
     { name: 'HumailEli_Performance_Reviews', description: 'Performance review data and scores' },
@@ -53,7 +54,7 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
     { name: 'HumailEli_Training_Modules', description: 'Training courses and modules' },
     { name: 'HumailEli_Training_Assignments', description: 'Training assignments and completions' },
     { name: 'HumailEli_Succession', description: 'Succession planning and talent pipeline' },
-    { name: 'HumailEli_Onboarding_Tasks', description: 'Onboarding checklists and task tracking' },
+    { name: 'HumailEli_OnboardingTasks', description: 'Onboarding checklists and task tracking' },
     { name: 'HumailEli_Org_Chart', description: 'Organizational chart structure' },
     { name: 'HumailEli_WhatsApp_Messages', description: 'WhatsApp message history' },
     { name: 'HumailEli_WhatsApp_Templates', description: 'WhatsApp message templates' },
@@ -81,10 +82,17 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
   }, [step]);
 
   const loadFolders = async () => {
+    if (!accessToken) {
+      setError('Google access token is missing. Please sign in again.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/drive/folders?accessToken=${encodeURIComponent(accessToken)}`);
+      const response = await fetch(`/api/drive/folders?accessToken=${encodeURIComponent(accessToken)}`, {
+        headers: getAuthHeaders('none')
+      });
       const data = await response.json();
       if (data.success) {
         setFolders(data.folders);
@@ -99,6 +107,10 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
   };
 
   const handleCreateFolder = async () => {
+    if (!accessToken) {
+      setError('Google access token is missing. Please sign in again.');
+      return;
+    }
     if (!newFolderName.trim()) {
       setError('Please enter a folder name');
       return;
@@ -110,7 +122,7 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
     try {
       const response = await fetch('/api/drive/create-folder', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders('json'),
         body: JSON.stringify({
           accessToken,
           folderName: newFolderName.trim(),
@@ -137,6 +149,10 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
   };
 
   const handleCreateSheets = async () => {
+    if (!accessToken) {
+      setError('Google access token is missing. Please sign in again.');
+      return;
+    }
     setStep('creating');
     setIsLoading(true);
     setCreationStatus({ 
@@ -148,7 +164,7 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
     try {
       const response = await fetch('/api/sheets/create-in-folder', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders('json'),
         body: JSON.stringify({
           accessToken,
           spreadsheetName: `${settings.companySettings?.companyName || 'Humail Eli'} - HRM Database`,
@@ -166,9 +182,14 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
         // Save to settings
         const updatedSettings = {
           ...settings,
-          googleSheetId: data.spreadsheetId,
           isMockMode: false,
-          storageType: 'google-sheets' as const
+          storageType: 'google-sheets' as const,
+          googleSheets: {
+            ...settings.googleSheets,
+            spreadsheetId: data.spreadsheetId,
+            documentsSheet: 'HumailEli_Employee_Documents',
+            onboardingTasksSheet: 'HumailEli_OnboardingTasks',
+          }
         };
         saveSettings(updatedSettings);
         refreshDataAdapter();

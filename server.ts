@@ -499,20 +499,33 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
       return res.status(400).json({ error: 'Missing idToken' });
     }
 
-    // Decode Google ID token (or fall back to simulated)
-    let email = 'demo@example.com';
-    let name = 'Demo User';
-    let picture = '';
-
+    // Verify Google ID token with Google before trusting user identity.
+    let googleResponse: Response;
     try {
-      const decodedToken = jwt.decode(idToken) as any;
-      if (decodedToken) {
-        email = decodedToken.email || email;
-        name = decodedToken.name || decodedToken.displayName || decodedToken.given_name || name;
-        picture = decodedToken.picture || decodedToken.photoURL || picture;
-      }
-    } catch (err) {
-      console.error('Error decoding Google ID token:', err);
+      googleResponse = await fetchWithRetry(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+        { timeout: 10000 },
+        {
+          maxRetries: 1,
+          baseDelay: 500,
+          retryableStatuses: [429, 500, 502, 503, 504],
+        }
+      );
+    } catch (verificationError: any) {
+      return res.status(503).json({ error: `Google token verification unavailable: ${verificationError.message || 'request failed'}` });
+    }
+
+    if (!googleResponse.ok) {
+      return res.status(401).json({ error: 'Invalid Google ID token' });
+    }
+
+    const googleTokenInfo: any = await googleResponse.json();
+    const email = googleTokenInfo.email;
+    const name = googleTokenInfo.name || googleTokenInfo.given_name || googleTokenInfo.email || 'Unknown User';
+    const picture = googleTokenInfo.picture || '';
+
+    if (!email) {
+      return res.status(401).json({ error: 'Google token is missing email claim' });
     }
 
     // Find or create employee
@@ -520,7 +533,7 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
     let employee = employees.find(e => e.email === email || e.personal?.email === email);
     if (!employee) {
       // Create new employee with default role 'Employee', or 'Admin' if it's the owner/user email
-      const isUserEmail = email === 'hmufk1@gmail.com' || email === 'demo@example.com';
+      const isUserEmail = email === 'hmufk1@gmail.com';
       const role = isUserEmail ? 'Admin' : 'Employee';
 
       employee = {
@@ -749,6 +762,17 @@ app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Mana
   }
 });
 
+// PUT /api/v1/employees/bulk
+app.put('/api/v1/employees/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req: any, res: any) => {
+  try {
+    const employees = Array.isArray(req.body?.employees) ? req.body.employees : [];
+    await saveEmployeesStore(employees);
+    res.json({ success: true, count: employees.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/v1/attendance
 app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
@@ -767,6 +791,17 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
     records.push(newRecord);
     await saveAttendanceToDB(records);
     res.status(201).json({ success: true, data: newRecord });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/v1/attendance/bulk
+app.put('/api/v1/attendance/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
+  try {
+    const records = Array.isArray((req as any).body?.records) ? (req as any).body.records : [];
+    await saveAttendanceToDB(records);
+    res.json({ success: true, count: records.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -829,6 +864,17 @@ app.put('/api/v1/leaves/:id/approve', authenticateToken, authorize(['HR', 'Admin
   }
 });
 
+// PUT /api/v1/leaves/bulk
+app.put('/api/v1/leaves/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
+  try {
+    const leaves = Array.isArray((req as any).body?.leaves) ? (req as any).body.leaves : [];
+    await saveLeavesToDB(leaves);
+    res.json({ success: true, count: leaves.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===== PAYROLL API =====
 
 // GET /api/v1/payroll
@@ -839,6 +885,28 @@ app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async 
     if (employeeId) payroll = payroll.filter(p => p.employeeId === employeeId);
     if (month) payroll = payroll.filter(p => p.month === month);
     res.json({ success: true, data: payroll, count: payroll.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/v1/payroll
+app.post('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
+  try {
+    const records = Array.isArray(req.body) ? req.body : [req.body];
+    await savePayrollToDB(records);
+    res.status(201).json({ success: true, count: records.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/v1/payroll/bulk
+app.put('/api/v1/payroll/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
+  try {
+    const records = Array.isArray((req as any).body?.records) ? (req as any).body.records : [];
+    await savePayrollToDB(records);
+    res.json({ success: true, count: records.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -891,6 +959,37 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
     
     await savePayrollToDB(payrollRecords);
     res.json({ success: true, data: payrollRecords, count: payrollRecords.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== CANDIDATES API =====
+
+app.get('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
+  try {
+    const candidates = await getCandidatesFromDB();
+    res.json({ success: true, data: candidates, count: candidates.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
+  try {
+    const candidates = Array.isArray(req.body) ? req.body : [req.body];
+    await saveCandidatesToDB(candidates);
+    res.status(201).json({ success: true, count: candidates.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/v1/candidates/bulk', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
+  try {
+    const candidates = Array.isArray((req as any).body?.candidates) ? (req as any).body.candidates : [];
+    await saveCandidatesToDB(candidates);
+    res.json({ success: true, count: candidates.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1431,9 +1530,8 @@ function isUrlSafe(urlString: string): boolean {
     const match = hostname.match(ipv4Regex);
     if (match) {
       const octets = match.slice(1, 5).map(Number);
-      if (octets[0] === 10) return false; // 10.0.0.0/8
-      if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return false; // 172.16.0.0/12
-      if (octets[0] === 192 && octets[1] === 168) return false; // 192.168.0.0/16
+      // Block link-local / metadata style ranges, but allow RFC1918 LAN ranges
+      // because biometric devices commonly live on private networks.
       if (octets[0] === 169 && octets[1] === 254) return false; // 169.254.0.0/16
     }
     // Block IPv6 private ranges (simplified)
@@ -1463,12 +1561,14 @@ app.post('/api/evaluate-video', async (req: any, res: any) => {
     if (!videoUrl) {
       return res.status(400).json({ 
         success: false, 
-        error: 'videoUrl is required (must be a publicly accessible URL or a Google Drive link)' 
+        error: 'videoUrl is required (must be a publicly accessible URL, Google Drive link, or data URL)' 
       });
     }
 
-    // SECURITY: Validate URL safety (SSRF Protection)
-    if (!isUrlSafe(videoUrl)) {
+    const isInlineDataUrl = typeof videoUrl === 'string' && videoUrl.startsWith('data:video/');
+
+    // SECURITY: Validate URL safety (SSRF Protection) for remote URLs only
+    if (!isInlineDataUrl && !isUrlSafe(videoUrl)) {
       return res.status(403).json({ 
         success: false, 
         error: 'URL is not allowed (must be public HTTP/HTTPS, no internal IPs)' 
@@ -1488,95 +1588,105 @@ app.post('/api/evaluate-video', async (req: any, res: any) => {
     const model = ai.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     // Fetch the video file from the URL (if it's a Drive link, we need to handle it)
-    let videoUrlForAI = videoUrl;
-    if (videoUrl.includes('drive.google.com')) {
-      const fileIdMatch = videoUrl.match(/[-\w]{25,}/);
-      if (fileIdMatch) {
-        videoUrlForAI = `https://drive.google.com/uc?export=download&id=${fileIdMatch[0]}`;
-      }
-    }
-
-    // SECURITY: Validate final transformed URL safety as well
-    if (!isUrlSafe(videoUrlForAI)) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Final transformed URL is not allowed' 
-      });
-    }
+    let base64Video = '';
+    let mimeType = 'video/mp4';
 
     // Set limits
     const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
     const TIMEOUT = 30000; // 30 seconds
 
-    // 1. Download the video with size & timeout limits
-    let response;
-    try {
-      response = await fetchWithRetry(videoUrlForAI, {
-        timeout: TIMEOUT,
-        method: 'GET',
-        headers: { 'Accept': 'video/*' },
-      }, {
-        maxRetries: 2,
-        baseDelay: 2000,
-        retryableStatuses: [429, 500, 502, 503, 504],
-        onRetry: (attempt, error) => {
-          console.warn(`Video fetch retry ${attempt}: ${error.message}`);
-        },
-      });
-    } catch (error: any) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Failed to fetch video: ${error.message}` 
-      });
-    }
+    if (isInlineDataUrl) {
+      const match = videoUrl.match(/^data:(video\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (!match) {
+        return res.status(400).json({ success: false, error: 'Invalid video data URL format' });
+      }
+      mimeType = match[1];
+      base64Video = match[2];
+      const estimatedSize = Math.floor((base64Video.length * 3) / 4);
+      if (estimatedSize > MAX_SIZE) {
+        return res.status(413).json({ success: false, error: `Video too large (${Math.round(estimatedSize/1024/1024)} MB > 100 MB limit)` });
+      }
+    } else {
+      let videoUrlForAI = videoUrl;
+      if (videoUrl.includes('drive.google.com')) {
+        const fileIdMatch = videoUrl.match(/[-\w]{25,}/);
+        if (fileIdMatch) {
+          videoUrlForAI = `https://drive.google.com/uc?export=download&id=${fileIdMatch[0]}`;
+        }
+      }
 
-    if (!response.ok) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Video download failed: HTTP ${response.status}` 
-      });
-    }
-
-    // Check Content-Length header if present
-    const contentLength = response.headers.get('content-length');
-    if (contentLength && parseInt(contentLength) > MAX_SIZE) {
-      return res.status(413).json({ 
-        success: false, 
-        error: `Video too large (${Math.round(parseInt(contentLength)/1024/1024)} MB > 100 MB limit)` 
-      });
-    }
-
-    if (!response.body) {
-      return res.status(400).json({
-        success: false,
-        error: 'Response body is empty'
-      });
-    }
-
-    // 2. Stream the response into a buffer with size cap
-    const reader = (response.body as any).getReader();
-    const chunks: any[] = [];
-    let totalSize = 0;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalSize += value.length;
-      if (totalSize > MAX_SIZE) {
-        // Cancel the stream to free resources
-        await reader.cancel();
-        return res.status(413).json({ 
+      if (!isUrlSafe(videoUrlForAI)) {
+        return res.status(403).json({ 
           success: false, 
-          error: `Video size exceeded limit (${Math.round(totalSize/1024/1024)} MB > 100 MB)` 
+          error: 'Final transformed URL is not allowed' 
         });
       }
-      chunks.push(value);
-    }
 
-    // Combine chunks into a single Buffer
-    const videoBuffer = Buffer.concat(chunks);
-    const base64Video = videoBuffer.toString('base64');
-    const mimeType = response.headers.get('content-type') || 'video/mp4'; 
+      let response;
+      try {
+        response = await fetchWithRetry(videoUrlForAI, {
+          timeout: TIMEOUT,
+          method: 'GET',
+          headers: { 'Accept': 'video/*' },
+        }, {
+          maxRetries: 2,
+          baseDelay: 2000,
+          retryableStatuses: [429, 500, 502, 503, 504],
+          onRetry: (attempt, error) => {
+            console.warn(`Video fetch retry ${attempt}: ${error.message}`);
+          },
+        });
+      } catch (error: any) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Failed to fetch video: ${error.message}` 
+        });
+      }
+
+      if (!response.ok) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Video download failed: HTTP ${response.status}` 
+        });
+      }
+
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && parseInt(contentLength) > MAX_SIZE) {
+        return res.status(413).json({ 
+          success: false, 
+          error: `Video too large (${Math.round(parseInt(contentLength)/1024/1024)} MB > 100 MB limit)` 
+        });
+      }
+
+      if (!response.body) {
+        return res.status(400).json({
+          success: false,
+          error: 'Response body is empty'
+        });
+      }
+
+      const reader = (response.body as any).getReader();
+      const chunks: any[] = [];
+      let totalSize = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalSize += value.length;
+        if (totalSize > MAX_SIZE) {
+          await reader.cancel();
+          return res.status(413).json({ 
+            success: false, 
+            error: `Video size exceeded limit (${Math.round(totalSize/1024/1024)} MB > 100 MB)` 
+          });
+        }
+        chunks.push(value);
+      }
+
+      const videoBuffer = Buffer.concat(chunks);
+      base64Video = videoBuffer.toString('base64');
+      mimeType = response.headers.get('content-type') || 'video/mp4';
+    }
 
     const prompt = `
 You are an expert hiring manager evaluating a candidate's video interview for the role of "${candidateRole}".

@@ -1,4 +1,5 @@
 import { logger } from '../../lib/logger';
+import { getAuthHeaders } from '../../lib/auth';
 import { IBiometricAdapter } from './IBiometricAdapter';
 import { BiometricPunchRecord, BiometricTestResult, BiometricDeviceConfig } from '../../types';
 
@@ -9,7 +10,7 @@ export class ZKTecoAdapter implements IBiometricAdapter {
   private async request<T>(endpoint: string, body: any): Promise<T> {
     const response = await fetch(`/api/zkteco/${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders('json'),
       body: JSON.stringify(body)
     });
     
