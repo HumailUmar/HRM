@@ -1080,6 +1080,8 @@ app.post('/api/admin/circuit-breaker/reset', authenticateToken, authorize(['Admi
     if (state) {
       state.state = 'CLOSED';
       state.failures = 0;
+      state.successInHalfOpen = 0;
+      state.halfOpenProbeInFlight = false;
       res.json({ success: true, message: `Circuit breaker for ${service} reset` });
     } else {
       res.json({ success: false, message: `Service ${service} not found` });
@@ -1090,6 +1092,8 @@ app.post('/api/admin/circuit-breaker/reset', authenticateToken, authorize(['Admi
       const state = circuitStates.get(key)!;
       state.state = 'CLOSED';
       state.failures = 0;
+      state.successInHalfOpen = 0;
+      state.halfOpenProbeInFlight = false;
     }
     res.json({ success: true, message: 'All circuit breakers reset' });
   }
