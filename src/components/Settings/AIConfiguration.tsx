@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Brain, Sparkles, Shield, Zap, 
-  CheckCircle, AlertCircle, Lock, Key,
+  CheckCircle, AlertCircle, Key,
   ChevronDown, ChevronRight, Server,
   Globe, Cpu, BarChart3
 } from 'lucide-react';
@@ -33,15 +33,12 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
   const [provider, setProvider] = useState<AIProvider>(
     (settings.ai.provider as AIProvider) || 'none'
   );
-  const [apiKey, setApiKey] = useState(settings.ai.apiKey || '');
-  const [customEndpoint, setCustomEndpoint] = useState(settings.ai.customEndpoint || '');
   const [aiFeatures, setAiFeatures] = useState({
     resumeParsing: settings.ai.enableResumeParsing ?? false,
     screening: settings.ai.enableScreening ?? false,
     jdMatching: settings.ai.enableJDMatching ?? false,
     analytics: settings.ai.enableAnalytics ?? false,
   });
-  const [showKey, setShowKey] = useState(false);
   const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
@@ -126,8 +123,6 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
       ai: {
         ...settings.ai,
         provider,
-        apiKey,
-        customEndpoint,
         enableResumeParsing: aiFeatures.resumeParsing,
         enableScreening: aiFeatures.screening,
         enableJDMatching: aiFeatures.jdMatching,
@@ -140,11 +135,6 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
   };
 
   const handleTestConnection = async () => {
-    if (!apiKey) {
-      setTestStatus({ success: false, message: 'Please enter an API key first' });
-      return;
-    }
-
     setIsTesting(true);
     setTestStatus(null);
 
@@ -152,7 +142,7 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
       const response = await fetch('/api/ai/test', {
         method: 'POST',
         headers: getAuthHeaders('json'),
-        body: JSON.stringify({ provider, apiKey, endpoint: customEndpoint })
+        body: JSON.stringify({ provider })
       });
       const data = await response.json();
       setTestStatus({
@@ -294,40 +284,12 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
               </select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-500">API Key</label>
-              <div className="flex gap-2">
-                <input
-                  type={showKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={`Enter ${provider === 'none' ? '...' : provider} API key`}
-                  disabled={provider === 'none'}
-                  className="flex-1 p-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-400"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="px-3 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
-                >
-                  {showKey ? <Lock className="w-4 h-4 text-slate-400" /> : <Key className="w-4 h-4 text-slate-400" />}
-                </button>
-              </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+              AI credentials are configured securely by an administrator on the server and are never stored in this browser.
             </div>
           </div>
 
-          {provider === 'custom' && (
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-500">Custom Endpoint URL</label>
-              <input
-                type="text"
-                value={customEndpoint}
-                onChange={(e) => setCustomEndpoint(e.target.value)}
-                placeholder="https://your-custom-ai-endpoint.com/v1/chat"
-                className="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              />
-            </div>
-          )}
+
 
           {provider !== 'none' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -346,7 +308,7 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={isTesting || provider === 'none' || !apiKey}
+              disabled={isTesting || provider !== 'gemini'}
               className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {isTesting ? (
@@ -393,17 +355,15 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-600">Status</span>
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                provider !== 'none' && apiKey ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                provider === 'gemini' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
               }`}>
-                {provider !== 'none' && apiKey ? 'Active' : 'Inactive'}
+                {provider === 'gemini' ? 'Server configured' : 'Inactive'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              {provider !== 'none' && apiKey 
-                ? `Using ${providerOptions.find(p => p.value === provider)?.label} (${apiKey.slice(0, 8)}...)`
-                : provider === 'none' 
-                  ? 'Core logic only — no AI features'
-                  : 'Configure API key to activate AI'}
+              {provider === 'gemini'
+                ? 'Gemini credentials are maintained on the server.'
+                : 'Core logic only — no AI features'}
             </p>
           </div>
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">

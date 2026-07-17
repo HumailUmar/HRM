@@ -548,8 +548,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   ai: {
     provider: 'none',
-    apiKey: '',
-    customEndpoint: '',
     enableResumeParsing: false,
     enableScreening: false,
     enableJDMatching: false,

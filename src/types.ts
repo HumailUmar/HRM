@@ -576,8 +576,6 @@ export interface GoogleSheetsConfig {
 
 export interface AIConfig {
   provider: 'gemini' | 'anthropic' | 'openai' | 'custom' | 'none';
-  apiKey?: string;
-  customEndpoint?: string;
   enableResumeParsing?: boolean;
   enableScreening?: boolean;
   enableJDMatching?: boolean;

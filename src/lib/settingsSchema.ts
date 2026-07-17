@@ -70,8 +70,6 @@ export const GoogleSheetsConfigSchema = z.object({
 
 export const AIConfigSchema = z.object({
   provider: z.enum(['gemini', 'anthropic', 'openai', 'custom', 'none']).default('none'),
-  apiKey: z.string().optional(),
-  customEndpoint: z.string().optional(),
   enableResumeParsing: z.boolean().default(false),
   enableScreening: z.boolean().default(false),
   enableJDMatching: z.boolean().default(false),
