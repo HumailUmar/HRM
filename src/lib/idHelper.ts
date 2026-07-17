@@ -3,6 +3,26 @@ const lastIssuedCounters = new Map<string, number>();
 /**
  * Ensures that the ID counters table exists in the database.
  */
+const BROWSER_COUNTER_KEY_PREFIX = 'humail_eli_counter_';
+
+function getNextBrowserCounter(entity: string): number {
+  if (typeof window === 'undefined') {
+    return ensureMonotonic(entity, (lastIssuedCounters.get(entity) ?? 1000) + 1);
+  }
+
+  const key = `${BROWSER_COUNTER_KEY_PREFIX}${entity}`;
+  const raw = window.localStorage.getItem(key);
+  const current = Number(raw || '1000');
+  const next = ensureMonotonic(entity, current + 1);
+  window.localStorage.setItem(key, String(next));
+  return next;
+}
+
+async function loadServerDatabaseModule() {
+  const modulePath = '../services/serverDatabase';
+  return import(/* @vite-ignore */ modulePath);
+}
+
 async function ensureIdCountersTable(conn: any): Promise<void> {
   const table = 'id_counters';
   let query: string;
@@ -56,8 +76,12 @@ function ensureMonotonic(entity: string, nextVal: number): number {
  * Uses a database counter table with row-level locking or atomic upsert.
  */
 export async function getNextId(entity: string, prefix: string = ''): Promise<string> {
+  if (typeof window !== 'undefined') {
+    return `${prefix}${String(getNextBrowserCounter(entity)).padStart(4, '0')}`;
+  }
+
   try {
-    const { getConnection } = await import(/* @vite-ignore */ '../services/serverDatabase');
+    const { getConnection } = await loadServerDatabaseModule();
     const conn = await getConnection();
     await ensureIdCountersTable(conn);
 
@@ -109,8 +133,12 @@ export async function getNextIdFromSequence(sequenceName: string, prefix: string
     throw new Error(`Invalid sequence name: "${sequenceName}". Only alphanumeric and underscore allowed.`);
   }
 
+  if (typeof window !== 'undefined') {
+    return `${prefix}${String(getNextBrowserCounter(sequenceName)).padStart(4, '0')}`;
+  }
+
   try {
-    const { getConnection } = await import(/* @vite-ignore */ '../services/serverDatabase');
+    const { getConnection } = await loadServerDatabaseModule();
     const conn = await getConnection();
 
     if (conn.type === 'mysql') {

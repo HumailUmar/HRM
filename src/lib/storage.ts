@@ -8,7 +8,7 @@ import { DEFAULT_PERFORMANCE_TEMPLATES } from './performanceReviewTemplates';
 import { 
   readSheet, appendToSheet, updateSheet, findRowById, ensureSheetExists 
 } from '../services/googleSheetsService';
-import { getSyncTracker, updateSyncTracker } from './syncTracker';
+import { getSyncTracker, updateSyncTracker, clearSyncTracker } from './syncTracker';
 import { getColumnLetterFromZero } from './columnUtils';
 import { SettingsSchema } from './settingsSchema';
 
@@ -1220,18 +1220,16 @@ export const getJDMatches = (): JDResumeMatch[] => loadData('jd_matches', []);
 export const saveJDMatches = (matches: JDResumeMatch[]) => {
   saveData('jd_matches', matches);
   if (!getSettings().isMockMode) {
-    import('../services/googleSheetsService').then(m => {
-      const rows = matches.map(match => [
-        match.id, match.jobId, match.candidateId, match.candidateName,
-        match.overallScore, match.matchLevel,
-        match.skillMatchScore, match.experienceMatchScore, match.educationMatchScore, match.certificationMatchScore,
-        match.matchingSkills.join(','), match.missingSkills.join(','),
-        match.aiSummary, match.aiRecommendation, match.aiReasoning,
-        match.status, match.reviewedBy || '', match.reviewedAt || '', match.notes,
-        match.createdAt, match.updatedAt
-      ]);
-      m.appendToSheet('HumailEli_JD_Matches', rows);
-    });
+    const rows = matches.map(match => [
+      match.id, match.jobId, match.candidateId, match.candidateName,
+      match.overallScore, match.matchLevel,
+      match.skillMatchScore, match.experienceMatchScore, match.educationMatchScore, match.certificationMatchScore,
+      match.matchingSkills.join(','), match.missingSkills.join(','),
+      match.aiSummary, match.aiRecommendation, match.aiReasoning,
+      match.status, match.reviewedBy || '', match.reviewedAt || '', match.notes,
+      match.createdAt, match.updatedAt
+    ]);
+    void appendToSheet('HumailEli_JD_Matches', rows);
   }
 };
 
@@ -2433,21 +2431,19 @@ export const getPerformanceReviews = (): PerformanceReview[] => loadData<Perform
 export const savePerformanceReviews = (data: PerformanceReview[]) => {
   saveData('performance_reviews', data);
   if (!getSettings().isMockMode) {
-    import('../services/googleSheetsService').then(m => {
-       const rows = data.map(r => [
-         r.id, r.employeeId, r.employeeName, r.reviewerId, r.reviewerName, r.reviewerType,
-         r.reviewCycleId, r.reviewCycleName,
-         JSON.stringify(r.sectionScores || []),
-         JSON.stringify(r.questionScores || []),
-         r.overallScore || 0, r.weightedOverallScore || 0,
-         JSON.stringify(r.strengths || []),
-         JSON.stringify(r.areasForImprovement || []),
-         JSON.stringify(r.goals || []),
-         r.recommendation || '', r.additionalComments || '',
-         r.status, r.submittedAt || '', r.acknowledgedAt || '', r.createdAt, r.updatedAt
-       ]);
-       m.updateSheet('HumailEli_Performance_Reviews', 'A1', [PERFORMANCE_REVIEW_HEADERS, ...rows]);
-    });
+    const rows = data.map(r => [
+      r.id, r.employeeId, r.employeeName, r.reviewerId, r.reviewerName, r.reviewerType,
+      r.reviewCycleId, r.reviewCycleName,
+      JSON.stringify(r.sectionScores || []),
+      JSON.stringify(r.questionScores || []),
+      r.overallScore || 0, r.weightedOverallScore || 0,
+      JSON.stringify(r.strengths || []),
+      JSON.stringify(r.areasForImprovement || []),
+      JSON.stringify(r.goals || []),
+      r.recommendation || '', r.additionalComments || '',
+      r.status, r.submittedAt || '', r.acknowledgedAt || '', r.createdAt, r.updatedAt
+    ]);
+    void updateSheet('HumailEli_Performance_Reviews', 'A1', [PERFORMANCE_REVIEW_HEADERS, ...rows]);
   }
 };
 
@@ -2522,7 +2518,7 @@ export function clearPreviousSyncIds(moduleName: string): void {
   if (typeof window === 'undefined') return;
   const key = `humail_eli_sync_ids_${moduleName}`;
   localStorage.removeItem(key);
-  import('./syncTracker').then(m => m.clearSyncTracker(moduleName));
+  clearSyncTracker(moduleName);
 }
 
 export function getPreviousSyncIds(moduleName: string): string[] {
