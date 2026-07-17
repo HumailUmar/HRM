@@ -1,6 +1,28 @@
+const lastIssuedCounters = new Map<string, number>();
+
 /**
  * Ensures that the ID counters table exists in the database.
  */
+const BROWSER_COUNTER_KEY_PREFIX = 'humail_eli_counter_';
+
+function getNextBrowserCounter(entity: string): number {
+  if (typeof window === 'undefined') {
+    return ensureMonotonic(entity, (lastIssuedCounters.get(entity) ?? 1000) + 1);
+  }
+
+  const key = `${BROWSER_COUNTER_KEY_PREFIX}${entity}`;
+  const raw = window.localStorage.getItem(key);
+  const current = Number(raw || '1000');
+  const next = ensureMonotonic(entity, current + 1);
+  window.localStorage.setItem(key, String(next));
+  return next;
+}
+
+async function loadServerDatabaseModule() {
+  const modulePath = '../services/serverDatabase';
+  return import(/* @vite-ignore */ modulePath);
+}
+
 async function ensureIdCountersTable(conn: any): Promise<void> {
   const table = 'id_counters';
   let query: string;
@@ -12,7 +34,6 @@ async function ensureIdCountersTable(conn: any): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `;
   } else {
-    // PostgreSQL
     query = `
       CREATE TABLE IF NOT EXISTS ${table} (
         entity VARCHAR(50) PRIMARY KEY,
@@ -31,11 +52,10 @@ export function generateUUID(prefix: string = ''): string {
     if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
       return `${prefix}${globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
     }
-  } catch (e) {
-    // ignore and fallback
+  } catch {
+    // Ignore and fall back.
   }
-  
-  // Fallback if randomUUID is not supported or errors out
+
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
   for (let i = 0; i < 8; i++) {
@@ -44,52 +64,57 @@ export function generateUUID(prefix: string = ''): string {
   return `${prefix}${result}`;
 }
 
+function ensureMonotonic(entity: string, nextVal: number): number {
+  const last = lastIssuedCounters.get(entity) ?? 1000;
+  const resolved = nextVal > last ? nextVal : last + 1;
+  lastIssuedCounters.set(entity, resolved);
+  return resolved;
+}
+
 /**
  * Atomically get the next ID for an entity.
  * Uses a database counter table with row-level locking or atomic upsert.
  */
 export async function getNextId(entity: string, prefix: string = ''): Promise<string> {
+  if (typeof window !== 'undefined') {
+    return `${prefix}${String(getNextBrowserCounter(entity)).padStart(4, '0')}`;
+  }
+
   try {
-    const { getConnection } = await import(/* @vite-ignore */ '../services/serverDatabase');
+    const { getConnection } = await loadServerDatabaseModule();
     const conn = await getConnection();
     await ensureIdCountersTable(conn);
-    
+
     const table = 'id_counters';
-    let query: string;
-    
+
     if (conn.type === 'mysql') {
-      // For MySQL, we run the insert/update first to update the counter atomically.
-      // ON DUPLICATE KEY UPDATE with LAST_INSERT_ID(expr) ensures we can fetch the value.
-      query = `
-        INSERT INTO ${table} (entity, next_val) VALUES (?, 1000)
-        ON DUPLICATE KEY UPDATE next_val = LAST_INSERT_ID(next_val + 1);
-      `;
-      
-      // To be 100% safe with pool connection scoping, use a single acquired connection
       const connection = await conn.pool.getConnection();
       try {
-        await connection.query(query, [entity]);
-        const [rows] = await connection.query('SELECT LAST_INSERT_ID() AS next_val');
-        const nextVal = (rows as any[])[0]?.next_val;
-        if (nextVal && nextVal > 0) {
-          connection.release();
-          return `${prefix}${String(nextVal).padStart(4, '0')}`;
-        }
+        await connection.query(
+          `
+            INSERT INTO ${table} (entity, next_val) VALUES (?, 1000)
+            ON DUPLICATE KEY UPDATE next_val = next_val + 1;
+          `,
+          [entity],
+        );
+        const [rows] = await connection.query(`SELECT next_val FROM ${table} WHERE entity = ?`, [entity]);
+        const rawNextVal = Number((rows as any[])[0]?.next_val || 1000);
+        const nextVal = ensureMonotonic(entity, rawNextVal);
+        return `${prefix}${String(nextVal).padStart(4, '0')}`;
       } finally {
         connection.release();
       }
-      throw new Error('Failed to obtain next ID from counter');
-    } else {
-      // PostgreSQL
-      query = `
-        INSERT INTO ${table} (entity, next_val) VALUES ($1, 1000)
-        ON CONFLICT (entity) DO UPDATE SET next_val = ${table}.next_val + 1
-        RETURNING next_val;
-      `;
-      const result = await conn.pool.query(query, [entity]);
-      const nextVal = result.rows[0]?.next_val || 1000;
-      return `${prefix}${String(nextVal).padStart(4, '0')}`;
     }
+
+    const query = `
+      INSERT INTO ${table} (entity, next_val) VALUES ($1, 1000)
+      ON CONFLICT (entity) DO UPDATE SET next_val = ${table}.next_val + 1
+      RETURNING next_val;
+    `;
+    const result = await conn.pool.query(query, [entity]);
+    const rawNextVal = Number(result.rows[0]?.next_val || 1000);
+    const nextVal = ensureMonotonic(entity, rawNextVal);
+    return `${prefix}${String(nextVal).padStart(4, '0')}`;
   } catch (error) {
     console.error('Database atomic ID generation failed, falling back to secure short UUID:', error);
     return generateUUID(prefix);
@@ -107,21 +132,24 @@ export async function getNextIdFromSequence(sequenceName: string, prefix: string
   if (!VALID_SEQUENCE_NAME.test(sequenceName)) {
     throw new Error(`Invalid sequence name: "${sequenceName}". Only alphanumeric and underscore allowed.`);
   }
+
+  if (typeof window !== 'undefined') {
+    return `${prefix}${String(getNextBrowserCounter(sequenceName)).padStart(4, '0')}`;
+  }
+
   try {
-    const { getConnection } = await import(/* @vite-ignore */ '../services/serverDatabase');
+    const { getConnection } = await loadServerDatabaseModule();
     const conn = await getConnection();
-    let query: string;
+
     if (conn.type === 'mysql') {
-      query = `SELECT NEXT VALUE FOR ${sequenceName} AS next_val`;
-      const [rows] = await conn.pool.query(query);
-      const nextVal = (rows as any[])[0]?.next_val || 1000;
-      return `${prefix}${String(nextVal).padStart(4, '0')}`;
-    } else {
-      query = `SELECT nextval('${sequenceName}') AS next_val`;
-      const result = await conn.pool.query(query);
-      const nextVal = result.rows[0]?.next_val || 1000;
-      return `${prefix}${String(nextVal).padStart(4, '0')}`;
+      const [rows] = await conn.pool.query(`SELECT NEXT VALUE FOR ${sequenceName} AS next_val`);
+      const nextVal = Number((rows as any[])[0]?.next_val || 1000);
+      return `${prefix}${String(ensureMonotonic(sequenceName, nextVal)).padStart(4, '0')}`;
     }
+
+    const result = await conn.pool.query(`SELECT nextval('${sequenceName}') AS next_val`);
+    const nextVal = Number(result.rows[0]?.next_val || 1000);
+    return `${prefix}${String(ensureMonotonic(sequenceName, nextVal)).padStart(4, '0')}`;
   } catch (error) {
     console.error(`Sequence ID generation for ${sequenceName} failed, falling back to secure short UUID:`, error);
     return generateUUID(prefix);

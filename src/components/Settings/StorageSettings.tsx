@@ -51,6 +51,52 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
   const [postgresPoolSize, setPostgresPoolSize] = useState(settings.postgresPoolSize || 10);
   const [postgresTimeout, setPostgresTimeout] = useState(settings.postgresTimeout || 10000);
 
+  const buildUpdatedSettings = (overrides: Partial<typeof settings> = {}) => ({
+    ...settings,
+    ...overrides,
+    mysqlHost,
+    mysqlPort,
+    mysqlDatabase,
+    mysqlUsername,
+    mysqlPassword,
+    mysqlSSL,
+    mysqlPoolSize,
+    mysqlTimeout,
+    postgresHost,
+    postgresPort,
+    postgresDatabase,
+    postgresUsername,
+    postgresPassword,
+    postgresSSL,
+    postgresPoolSize,
+    postgresTimeout,
+    database: {
+      ...settings.database,
+      mysql: {
+        ...settings.database.mysql,
+        host: mysqlHost,
+        port: Number(mysqlPort),
+        database: mysqlDatabase,
+        username: mysqlUsername,
+        password: mysqlPassword,
+        ssl: mysqlSSL,
+        poolSize: Number(mysqlPoolSize),
+        timeout: Number(mysqlTimeout),
+      },
+      postgres: {
+        ...settings.database.postgres,
+        host: postgresHost,
+        port: Number(postgresPort),
+        database: postgresDatabase,
+        username: postgresUsername,
+        password: postgresPassword,
+        ssl: postgresSSL,
+        poolSize: Number(postgresPoolSize),
+        timeout: Number(postgresTimeout),
+      },
+    },
+  });
+
   const storageOptions: { 
     value: StorageType; 
     label: string; 
@@ -110,7 +156,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
     
     setIsLoading(true);
     
-    const updatedSettings = { ...settings, storageType: pendingStorageType };
+    const updatedSettings = buildUpdatedSettings({ storageType: pendingStorageType });
     
     if (pendingStorageType === 'mysql') {
       // Reset to defaults when switching to MySQL as requested
@@ -131,6 +177,17 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
       updatedSettings.mysqlSSL = false;
       updatedSettings.mysqlPoolSize = 10;
       updatedSettings.mysqlTimeout = 10000;
+      updatedSettings.database.mysql = {
+        ...updatedSettings.database.mysql,
+        host: 'localhost',
+        port: 3306,
+        database: 'humail_eli_hrm',
+        username: 'admin',
+        password: '',
+        ssl: false,
+        poolSize: 10,
+        timeout: 10000,
+      };
     }
 
     if (pendingStorageType === 'postgresql') {
@@ -152,6 +209,17 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
       updatedSettings.postgresSSL = false;
       updatedSettings.postgresPoolSize = 10;
       updatedSettings.postgresTimeout = 10000;
+      updatedSettings.database.postgres = {
+        ...updatedSettings.database.postgres,
+        host: 'localhost',
+        port: 5432,
+        database: 'humail_eli_hrm',
+        username: 'postgres',
+        password: '',
+        ssl: false,
+        poolSize: 10,
+        timeout: 10000,
+      };
     }
 
     saveSettings(updatedSettings);
@@ -185,7 +253,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
         });
         break;
       case 'google-sheets':
-        if (settings.googleSheetId && settings.googleSheetId !== 'Placeholder') {
+        if (settings.googleSheets.spreadsheetId && settings.googleSheets.spreadsheetId !== 'Placeholder') {
           setStatus({
             connected: true,
             message: 'Connected to Google Sheets',
@@ -472,17 +540,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
               type="button"
               onClick={() => {
                 // Save MySQL config to settings
-                const updatedSettings = { 
-                  ...settings, 
-                  mysqlHost, 
-                  mysqlPort, 
-                  mysqlDatabase, 
-                  mysqlUsername, 
-                  mysqlPassword, 
-                  mysqlSSL, 
-                  mysqlPoolSize, 
-                  mysqlTimeout 
-                };
+                const updatedSettings = buildUpdatedSettings();
                 saveSettings(updatedSettings);
                 setSettings(updatedSettings);
                 alert('MySQL configuration saved!');
@@ -598,17 +656,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
               type="button"
               onClick={() => {
                 // Save PostgreSQL config to settings
-                const updatedSettings = { 
-                  ...settings, 
-                  postgresHost, 
-                  postgresPort, 
-                  postgresDatabase, 
-                  postgresUsername, 
-                  postgresPassword, 
-                  postgresSSL, 
-                  postgresPoolSize, 
-                  postgresTimeout 
-                };
+                const updatedSettings = buildUpdatedSettings();
                 saveSettings(updatedSettings);
                 setSettings(updatedSettings);
                 alert('PostgreSQL configuration saved!');
@@ -647,7 +695,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
               {selectedStorage === 'local' 
                 ? 'Browser (localStorage)' 
                 : selectedStorage === 'google-sheets'
-                  ? `Google Sheet: ${settings.googleSheetId ? settings.googleSheetId.slice(0, 20) + '...' : 'Not configured'}`
+                  ? `Google Sheet: ${settings.googleSheets.spreadsheetId ? settings.googleSheets.spreadsheetId.slice(0, 20) + '...' : 'Not configured'}`
                   : selectedStorage === 'mysql'
                     ? `MySQL: ${settings.mysqlHost || 'localhost'}:${settings.mysqlPort || 3306}`
                     : selectedStorage === 'postgresql'
@@ -669,7 +717,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
                 ? (settings.mysqlDatabase || 'humail_eli_hrm')
                 : selectedStorage === 'postgresql'
                   ? (settings.postgresDatabase || 'humail_eli_hrm')
-                  : (settings.googleSheetId || 'Not configured')
+                  : (settings.googleSheets.spreadsheetId || 'Not configured')
               }
             </p>
           </div>

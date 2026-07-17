@@ -96,11 +96,17 @@ export function calculateMatch(job: JobDescription, candidate: Candidate): JDRes
     console.log(`[Matching] Dynamic weight redistribution active. Total active base weight: ${totalActiveWeight}. Normalized weights:`, weights);
   }
 
-  const overallScore =
+  const rawOverallScore =
     skillScore * weights.skill +
     experienceScore * weights.experience +
     educationScore * weights.education +
     certificationScore * weights.certification;
+
+  // Guardrail: if the candidate misses all required skills, other factors should not
+  // overstate the match. This keeps "no-skill" candidates out of strong ranges.
+  const overallScore = hasSkillReq && skillScore === 0
+    ? Math.min(rawOverallScore, 0.49)
+    : rawOverallScore;
 
   const matchPercentage = Math.round(overallScore * 100);
   const matchLevel = getMatchLevel(matchPercentage);
@@ -189,19 +195,19 @@ export function calculateMatch(job: JobDescription, candidate: Candidate): JDRes
 function getSkillRequirements(job: JobDescription): string[] {
   return job.requirements
     .filter(r => r.category === 'Skill')
-    .map(r => r.name.toLowerCase());
+    .map(r => r.name);
 }
 
 function getEducationRequirements(job: JobDescription): string[] {
   return job.requirements
     .filter(r => r.category === 'Education')
-    .map(r => r.name.toLowerCase());
+    .map(r => r.name);
 }
 
 function getCertificationRequirements(job: JobDescription): string[] {
   return job.requirements
     .filter(r => r.category === 'Certification')
-    .map(r => r.name.toLowerCase());
+    .map(r => r.name);
 }
 
 function getExperienceRequired(job: JobDescription): number {
@@ -214,38 +220,37 @@ function calculateSkillScore(job: JobDescription, candidate: Candidate): number 
   const jobSkills = getSkillRequirements(job);
   if (jobSkills.length === 0) return 0;
 
-  const candidateSkills = (candidate.skills || []).map(s => s.toLowerCase());
-  const matched = jobSkills.filter(s => candidateSkills.includes(s));
+  const normalizedCandidateSkills = (candidate.skills || []).map(normalizeText);
+  const matched = jobSkills.filter(skill => normalizedCandidateSkills.includes(normalizeText(skill)));
   return matched.length / jobSkills.length;
 }
 
 function getMatchedSkills(job: JobDescription, candidate: Candidate): string[] {
   const jobSkills = getSkillRequirements(job);
-  const candidateSkills = (candidate.skills || []).map(s => s.toLowerCase());
-  return jobSkills.filter(s => candidateSkills.includes(s));
+  const normalizedCandidateSkills = (candidate.skills || []).map(normalizeText);
+  return jobSkills.filter(skill => normalizedCandidateSkills.includes(normalizeText(skill)));
 }
 
 function getMissingSkills(job: JobDescription, candidate: Candidate): string[] {
   const jobSkills = getSkillRequirements(job);
-  const candidateSkills = (candidate.skills || []).map(s => s.toLowerCase());
-  const partials = getPartialSkills(job, candidate);
-  return jobSkills.filter(s => !candidateSkills.includes(s) && !partials.includes(s));
+  const normalizedCandidateSkills = (candidate.skills || []).map(normalizeText);
+  const partials = new Set(getPartialSkills(job, candidate).map(normalizeText));
+  return jobSkills.filter(skill => !normalizedCandidateSkills.includes(normalizeText(skill)) && !partials.has(normalizeText(skill)));
 }
 
 function getPartialSkills(job: JobDescription, candidate: Candidate): string[] {
   const jobSkills = getSkillRequirements(job);
   if (jobSkills.length === 0) return [];
 
-  const candidateSkills = (candidate.skills || []).map(s => s.toLowerCase());
+  const normalizedCandidateSkills = (candidate.skills || []).map(normalizeText);
   const partials: string[] = [];
 
-  for (const jSkill of jobSkills) {
-    // Already fully matched? Skip.
-    if (candidateSkills.includes(jSkill)) continue;
+  for (const jobSkill of jobSkills) {
+    const normalizedJobSkill = normalizeText(jobSkill);
+    if (normalizedCandidateSkills.includes(normalizedJobSkill)) continue;
 
-    // Check for substring match (case-insensitive)
-    if (candidateSkills.some(cs => cs.includes(jSkill) || jSkill.includes(cs))) {
-      partials.push(jSkill);
+    if (normalizedCandidateSkills.some(candidateSkill => candidateSkill.includes(normalizedJobSkill) || normalizedJobSkill.includes(candidateSkill))) {
+      partials.push(jobSkill);
     }
   }
 

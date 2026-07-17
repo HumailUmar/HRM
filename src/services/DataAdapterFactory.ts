@@ -9,7 +9,34 @@ import { getSettings } from '../lib/storage';
 export type StorageType = 'local' | 'google-sheets' | 'mysql' | 'postgresql' | 'api';
 
 let cachedAdapter: IDataAdapter | null = null;
-let currentStorageType: StorageType | null = null;
+let currentAdapterSignature: string | null = null;
+
+function buildAdapterSignature(settings: ReturnType<typeof getSettings>, resolvedStorageType: StorageType): string {
+  return JSON.stringify({
+    resolvedStorageType,
+    sheetId: settings.googleSheets?.spreadsheetId || '',
+    mysql: settings.database?.mysql || {},
+    postgres: settings.database?.postgres || {},
+    flatMysql: {
+      host: settings.mysqlHost,
+      port: settings.mysqlPort,
+      database: settings.mysqlDatabase,
+      username: settings.mysqlUsername,
+      ssl: settings.mysqlSSL,
+      poolSize: settings.mysqlPoolSize,
+      timeout: settings.mysqlTimeout,
+    },
+    flatPostgres: {
+      host: settings.postgresHost,
+      port: settings.postgresPort,
+      database: settings.postgresDatabase,
+      username: settings.postgresUsername,
+      ssl: settings.postgresSSL,
+      poolSize: settings.postgresPoolSize,
+      timeout: settings.postgresTimeout,
+    },
+  });
+}
 
 export function getDataAdapter(): IDataAdapter {
   const settings = getSettings();
@@ -21,7 +48,8 @@ export function getDataAdapter(): IDataAdapter {
     resolvedStorageType = 'local';
   }
 
-  if (cachedAdapter && currentStorageType === resolvedStorageType) {
+  const nextSignature = buildAdapterSignature(settings, resolvedStorageType);
+  if (cachedAdapter && currentAdapterSignature === nextSignature) {
     return cachedAdapter;
   }
 
@@ -62,13 +90,13 @@ export function getDataAdapter(): IDataAdapter {
       break;
   }
 
-  currentStorageType = resolvedStorageType;
+  currentAdapterSignature = nextSignature;
   logger.info(`✅ Data adapter initialized: ${resolvedStorageType}`);
   return cachedAdapter;
 }
 
 export function refreshDataAdapter(): IDataAdapter {
   cachedAdapter = null;
-  currentStorageType = null;
+  currentAdapterSignature = null;
   return getDataAdapter();
 }

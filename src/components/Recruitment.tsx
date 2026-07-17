@@ -1,5 +1,7 @@
 import { useData } from '../contexts/DataContext';
 import { logger } from '../lib/logger';
+import { getAuthHeaders } from '../lib/auth';
+import { getOnboardingTasks, saveOnboardingTasks } from '../lib/storage';
 import { useState, useMemo, useEffect, DragEvent, ChangeEvent, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import JobDescriptions from './JobDescriptions';
@@ -11,6 +13,7 @@ import ScorecardsList from './ScorecardsList';
 import { HireCandidateModal } from './HireCandidateModal';
 import { Candidate, AppSettings, JobDescription, Employee, LegacyOnboardingTask, OnboardingTemplate, JDResumeMatch, StageTemplate, InterviewPanel, EvaluationScorecard, User, Department, Designation } from '../types';
 import { calculateMatch } from '../utils/matchingAlgorithm';
+import { getNextId } from '../lib/idHelper';
 import { getInitials } from '../utils/safeText';
 import { SCREENING_QUESTIONS } from '../lib/mockData';
 import { Upload, FileText, CheckCircle, Search, Sliders, AlertCircle, PhoneCall, MessageCircle, Star, Sparkles, Filter, X, Play, RefreshCw, FolderOpen, ArrowRight, ArrowLeft, Video, Send, UserPlus } from 'lucide-react';
@@ -97,6 +100,24 @@ export default function Recruitment({
   }, [selectedJdId, jobDescriptions]);
 
   const [activeScreeningTab, setActiveScreeningTab] = useState<'chatbot' | 'video' | 'voice' | 'scorecard'>('chatbot');
+
+  const persistCandidates = async (nextCandidates: Candidate[]) => {
+    setCandidates(nextCandidates);
+    try {
+      await data.saveCandidates(nextCandidates);
+    } catch (error) {
+      logger.error('Failed to persist candidates:', error);
+    }
+  };
+
+  const persistEmployees = async (nextEmployees: Employee[]) => {
+    setEmployees(nextEmployees);
+    try {
+      await data.saveEmployees(nextEmployees);
+    } catch (error) {
+      logger.error('Failed to persist employees:', error);
+    }
+  };
   
   // Chatbot State
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; content: string; timestamp: string }[]>([]);
@@ -258,7 +279,7 @@ export default function Recruitment({
       });
 
       const updated = [...processedCandidates, ...candidates];
-      setCandidates(updated);
+      void persistCandidates(updated);
       
       if (activeJd) {
          setJdMatches(currentMatches);
@@ -332,7 +353,7 @@ export default function Recruitment({
       return cand;
     });
 
-    setCandidates(updated);
+    void persistCandidates(updated);
     if (activeJd) {
         alert(`Shortlist run complete! ${shortlistedCount} candidates shortlisted based on the active Job Description "${activeJd.title}".`);
     } else {
@@ -375,7 +396,7 @@ export default function Recruitment({
       // Attempt live Express server connection
       const response = await fetch("/api/chat-screen", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders('json'),
         body: JSON.stringify({
           messages: updatedMessages,
           candidateName: candidate.name,
@@ -476,7 +497,7 @@ export default function Recruitment({
         return c;
       });
 
-      setCandidates(updatedCandidates);
+      void persistCandidates(updatedCandidates);
       alert(`AI Chatbot evaluation complete! Screener Score: ${score}/100. ${summary}`);
     } catch (err) {
       logger.error(err);
@@ -565,7 +586,7 @@ export default function Recruitment({
             return c;
           });
 
-          setCandidates(updatedCandidates);
+          void persistCandidates(updatedCandidates);
           alert(`AI Video response analysis finished! Video score: ${score}/100. ${summary}`);
         } catch (err) {
           logger.error(err);
@@ -591,7 +612,7 @@ export default function Recruitment({
     const updatedCandidates = candidates.map(c => 
       c.id === candId ? { ...c, status: 'Hired' as const } : c
     );
-    setCandidates(updatedCandidates);
+    void persistCandidates(updatedCandidates);
 
     // 2. Map candidate data to Employee
     const occupiedSeats = employees.filter(e => e.status !== 'Terminated').map(e => e.employment.seatNumber);
@@ -603,7 +624,7 @@ export default function Recruitment({
       }
     }
 
-    const newEmpId = `EMP-${Math.floor(100 + Math.random() * 900)}`;
+    const newEmpId = await getNextId('employee', 'EMP-');
     
     // Initialize advanced onboarding tasks status mapping
     const tasksStatus: { [taskId: string]: 'pending' | 'in-progress' | 'completed' | 'overdue' } = {};
@@ -706,10 +727,11 @@ export default function Recruitment({
       completed: false
     }));
 
-    // Add to employees state
-    setEmployees([newEmployee, ...employees]);
+    // Persist the new employee and onboarding tasks.
+    void persistEmployees([newEmployee, ...employees]);
+    const existingTasks = getOnboardingTasks();
+    saveOnboardingTasks([...legacyOnboardingTasks, ...existingTasks]);
 
-    // Save to OnboardingTasks state (stored via Local/Sheet triggers)
     if (!settings.isMockMode) {
       try {
         const { syncEmployeeToGSheet, syncOnboardingTaskToGSheet } = await import('../lib/storage');
@@ -772,7 +794,7 @@ export default function Recruitment({
       };
 
       const updated = candidates.map(c => c.id === candId ? updatedCand : c);
-      setCandidates(updated);
+      void persistCandidates(updated);
       setIsScreeningCallActive(false);
 
       data.addSheetLog(settings.googleSheets.recruitmentSheet || 'Recruitment', "UPDATE", {
@@ -804,7 +826,7 @@ export default function Recruitment({
       try {
         const response = await fetch("/api/whatsapp/send", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders('json'),
           body: JSON.stringify({
             phoneNumberId: settings.whatsApp.phoneNumberId,
             accessToken: settings.whatsApp.accessToken,
@@ -850,7 +872,7 @@ export default function Recruitment({
     };
 
     const updated = candidates.map(c => c.id === candId ? updatedCand : c);
-    setCandidates(updated);
+    void persistCandidates(updated);
 
     data.addSheetLog(settings.googleSheets.recruitmentSheet || 'Recruitment', "INSERT", {
       candidateId: updatedCand.id,
@@ -918,7 +940,7 @@ export default function Recruitment({
       return c;
     });
 
-    setCandidates(updated);
+    void persistCandidates(updated);
     setDraggedCandidateId(null);
   };
 
@@ -958,7 +980,7 @@ export default function Recruitment({
       return c;
     });
 
-    setCandidates(updated);
+    void persistCandidates(updated);
   };
 
   const selectedCandidate = useMemo(() => {
@@ -1375,6 +1397,8 @@ export default function Recruitment({
                       activeScreeningTab === 'voice' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
+                    AI Voice Call
+                  </button>
                   <button
                     onClick={() => setActiveScreeningTab('scorecard')}
                     className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
@@ -1382,8 +1406,6 @@ export default function Recruitment({
                     }`}
                   >
                     Scorecard
-                  </button>
-                    AI Voice Call
                   </button>
                 </div>
               </div>
@@ -1746,7 +1768,7 @@ export default function Recruitment({
               onClose={() => setHireCandidate(null)}
               onHire={() => {
                 const updated = candidates.map(c => c.id === hireCandidate.id ? {...c, status: 'Hired'} : c);
-                setCandidates(updated as Candidate[]);
+                void persistCandidates(updated as Candidate[]);
                 data.saveCandidates(updated as Candidate[]);
                 data.addSheetLog(settings.googleSheets.recruitmentSheet || 'Recruitment', "UPDATE", { candidateId: hireCandidate.id, name: hireCandidate.name, newStatus: 'Hired' });
               }}

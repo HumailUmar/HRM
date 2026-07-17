@@ -39,9 +39,9 @@ const EmployeePortal = lazy(() => import('./components/EmployeePortal'));
 const ManagerPortal = lazy(() => import('./components/ManagerPortal'));
 
 
-import { getToken, getUser, setAuthData, clearAuthData, isAuthenticated, hasToken, googleSignIn, logout } from './lib/auth';
+import { getToken, getUser, setAuthData, clearAuthData, verifySession, hasToken, googleSignIn, logout } from './lib/auth';
 import { Employee, AttendanceRecord, Candidate, PayrollRecord, AppSettings, LeaveRecord, LegacyOnboardingTask, OnboardingTemplate, Department, Designation, EmployeeDocument, JobDescription } from './types';
-import { getDataAdapter } from './services';
+import { getSettings as loadStoredSettings, saveSettings as persistSettings } from './lib/storage';
 
 // ===== NEW MAPPING: connects sidebar tab IDs to portal sections =====
 const portalSectionMap: Record<string, { portal: 'employee' | 'manager', section: string }> = {
@@ -69,13 +69,32 @@ export default function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   useEffect(() => {
-    const token = getToken();
-    const user = getUser();
-    if (token && user) {
-      setUser(user);
-      setToken(token);
-    }
-    setIsAuthLoading(false);
+    let mounted = true;
+
+    const restoreSession = async () => {
+      const token = getToken();
+      if (!token) {
+        if (mounted) setIsAuthLoading(false);
+        return;
+      }
+
+      const restoredUser = await verifySession();
+      if (mounted) {
+        if (restoredUser) {
+          setUser(restoredUser);
+          setToken(token);
+        } else {
+          setUser(null);
+          setToken(null);
+        }
+        setIsAuthLoading(false);
+      }
+    };
+
+    void restoreSession();
+    return () => {
+      mounted = false;
+    };
   }, []);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const employee = useMemo<Employee | null>(
@@ -85,7 +104,7 @@ export default function App() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({ isMockMode: true });
+  const [settings, setSettings] = useState<AppSettings>(() => loadStoredSettings());
   const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
   const [onboardingTasks, setOnboardingTasks] = useState<LegacyOnboardingTask[]>([]);
   const [onboardingTemplates, setOnboardingTemplates] = useState<OnboardingTemplate[]>([]);
@@ -137,7 +156,7 @@ export default function App() {
   const handleSyncAll = async () => {
     setIsLoadingGSheet(true);
     try {
-      await data.sync();
+      await data.syncAll();
       // Re-load all data after sync to ensure consistency
       const [emps, att, pay, levs, depts, desigs, docs, tasks, tmpls, jobs, cands] = await Promise.all([
         data.getEmployees(),
@@ -177,7 +196,11 @@ export default function App() {
       if (result) {
         setAuthData(result.token, result.user);
         setUser(result.user);
-        setSettings(prev => ({ ...prev, isMockMode: false }));
+        setSettings(prev => {
+          const next = { ...prev, isMockMode: false };
+          persistSettings(next);
+          return next;
+        });
       }
     } catch (e) {
       logger.error("Sign in failed:", e);
@@ -198,7 +221,11 @@ export default function App() {
   const handleSignOut = async () => {
     await logout();
     setUser(null);
-    setSettings(prev => ({ ...prev, isMockMode: true }));
+    setSettings(prev => {
+      const next = { ...prev, isMockMode: true };
+      persistSettings(next);
+      return next;
+    });
   };
   const canAccess = (tab: string, role: string | undefined) => {
     // Default to 'Employee' if role is missing or undefined
@@ -241,11 +268,6 @@ export default function App() {
   // ... (rest of the component)
   if (isAuthLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  }
-
-  // If user is null but token exists, we're still restoring
-  if (!user && getToken()) {
-    return <div className="min-h-screen flex items-center justify-center">Restoring session...</div>;
   }
 
   if (!hasToken()) {

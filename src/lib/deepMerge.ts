@@ -1,38 +1,46 @@
+const isPlainObject = (value: unknown): value is Record<string, any> => {
+  if (value === null || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
 /**
- * Deep merge two plain objects. Safely handles Dates, typed instances,
- * arrays (replaced, not merged), and guards against circular references.
+ * Deep merge two plain objects.
+ * - Plain nested objects are recursively merged.
+ * - Arrays are replaced, not concatenated.
+ * - Dates are copied by value.
+ * - Non-plain objects are replaced wholesale.
  */
 export function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
-  if (!target || typeof target !== 'object') return { ...(source as T) };
-  if (!source || typeof source !== 'object') return target;
+  if (!isPlainObject(target)) return { ...(source as T) };
+  if (!isPlainObject(source)) return { ...target };
 
-  const result: Record<string, any> = { ...target };
-  const seen = new WeakSet<object>();
+  const merge = (base: Record<string, any>, patch: Record<string, any>): Record<string, any> => {
+    const result: Record<string, any> = { ...base };
 
-  const merge = (tgt: Record<string, any>, src: Record<string, any>): Record<string, any> => {
-    for (const key in src) {
-      if (!Object.prototype.hasOwnProperty.call(src, key)) continue;
-      const srcVal = (src as any)[key];
-      const tgtVal = tgt[key];
+    for (const [key, srcVal] of Object.entries(patch)) {
+      const tgtVal = result[key];
 
-      // Dates and other typed instances are copied by value, never field-merged.
       if (srcVal instanceof Date) {
         result[key] = new Date(srcVal.getTime());
         continue;
       }
-      if (srcVal !== null && typeof srcVal === 'object' && !Array.isArray(srcVal)) {
-        if (tgtVal !== null && typeof tgtVal === 'object' && !Array.isArray(tgtVal)) {
-          if (seen.has(srcVal)) continue; // circular ref guard
-          seen.add(srcVal);
-          result[key] = merge({ ...tgtVal }, srcVal);
-          continue;
-        }
+
+      if (Array.isArray(srcVal)) {
+        result[key] = [...srcVal];
+        continue;
       }
-      // Arrays, primitives, null, and other instances replace wholesale.
+
+      if (isPlainObject(srcVal) && isPlainObject(tgtVal)) {
+        result[key] = merge(tgtVal, srcVal);
+        continue;
+      }
+
       result[key] = srcVal;
     }
-    return result as T;
+
+    return result;
   };
 
-  return merge(result, source as Record<string, any>) as T;
+  return merge(target, source as Record<string, any>) as T;
 }

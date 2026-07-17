@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AttendanceRecord, Employee, AppSettings, Department, Designation, BiometricDeviceConfig } from '../types';
 import { useData } from '../contexts/DataContext';
+import { getAuthHeaders } from '../lib/auth';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 import { safeLower } from '../utils/safeText';
 import { 
@@ -127,6 +128,9 @@ export default function Attendance({
         case 'generic':
           endpoint = '/api/generic/punches';
           break;
+        case 'mock':
+          endpoint = '/api/biometric/sync';
+          break;
         default:
           throw new Error(`Unsupported device type: ${activeDevice.type}`);
       }
@@ -135,8 +139,8 @@ export default function Attendance({
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...baseConfig, ...params }),
+        headers: getAuthHeaders('json'),
+        body: JSON.stringify({ ...baseConfig, ...params, deviceType: activeDevice.type, config: activeDevice, isMockMode: isDemoMode }),
       });
 
       if (!response.ok) {
@@ -234,7 +238,9 @@ export default function Attendance({
         if (checkIn) {
           const [hours, minutes] = checkIn.split(':').map(Number);
           const totalMinutes = hours * 60 + minutes;
-          const threshold = 9 * 60 + 5; // 9:05 AM
+          const lateThreshold = settings.attendanceRules?.lateThreshold || '09:05';
+          const [lateHours, lateMins] = lateThreshold.split(':').map(Number);
+          const threshold = lateHours * 60 + lateMins;
           if (totalMinutes > threshold) {
             lateMinutes = totalMinutes - threshold;
           }
@@ -245,7 +251,9 @@ export default function Attendance({
         if (checkOut) {
           const [hours, minutes] = checkOut.split(':').map(Number);
           const totalMinutes = hours * 60 + minutes;
-          const threshold = 17 * 60 + 30; // 5:30 PM
+          const departureThreshold = settings.attendanceRules?.earlyDepartureThreshold || '17:30';
+          const [depHours, depMins] = departureThreshold.split(':').map(Number);
+          const threshold = depHours * 60 + depMins;
           if (totalMinutes < threshold) {
             earlyDepartureMinutes = threshold - totalMinutes;
           }

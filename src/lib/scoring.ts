@@ -273,22 +273,17 @@ export function calculateOverallScore(
  * 
  * NO function calls, NO object access, NO array access, NO arbitrary code execution.
  */
-function safeEvaluate(expression: string, score: number): boolean {
+export function safeEvaluate(expression: string, score: number): boolean {
   if (!Number.isFinite(score)) {
     throw new Error(`Cannot evaluate against non-finite score: ${score}`);
   }
-  // 1. Replace 'score' with the actual numeric value
-  const sanitized = expression.replace(/score/g, String(score));
 
-  // 2. Validate that the expression contains ONLY safe characters.
-  // Arithmetic operators (* / %) are NOT allowed: conditions must be comparisons.
-  // Permitting them let misconfigured conditions silently evaluate to false.
-  const allowedPattern = /^[\d\s+\-.]+$/;
+  const sanitized = expression.replace(/\bscore\b/g, String(score));
+  const allowedPattern = /^[\d\s().!<>=&|+-]+$/;
   if (!allowedPattern.test(sanitized)) {
     throw new Error(`Unsafe or unsupported expression detected: "${expression}"`);
   }
 
-  // 3. For maximum safety, use a simple parser.
   return evaluateSafeExpression(sanitized);
 }
 
@@ -297,75 +292,91 @@ function safeEvaluate(expression: string, score: number): boolean {
  * This avoids eval() and Function constructor entirely.
  */
 function evaluateSafeExpression(expr: string): boolean {
-  // Remove whitespace for easier parsing
-  const cleaned = expr.replace(/\s/g, '');
-  
-  // Handle simple comparisons first
-  // Pattern: value1 operator value2
-  const comparisonMatch = cleaned.match(/^([\d.]+)(==|!=|>=|<=|>|<)([\d.]+)$/);
-  if (comparisonMatch) {
+  const cleaned = expr.replace(/\s+/g, '');
+  if (!cleaned) {
+    throw new Error('Empty expression');
+  }
+
+  const stripOuterParens = (input: string): string => {
+    let value = input;
+    while (value.startsWith('(') && value.endsWith(')')) {
+      let depth = 0;
+      let wrapsWholeExpression = true;
+      for (let i = 0; i < value.length; i++) {
+        const ch = value[i];
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        if (depth === 0 && i < value.length - 1) {
+          wrapsWholeExpression = false;
+          break;
+        }
+      }
+      if (!wrapsWholeExpression) break;
+      value = value.slice(1, -1);
+    }
+    return value;
+  };
+
+  const findTopLevelOperator = (input: string, operator: '||' | '&&'): number => {
+    let depth = 0;
+    for (let i = 0; i < input.length - 1; i++) {
+      const ch = input[i];
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      if (depth === 0 && input.slice(i, i + 2) === operator) return i;
+    }
+    return -1;
+  };
+
+  const parseComparison = (input: string): boolean => {
+    const comparisonMatch = input.match(/^(-?\d+(?:\.\d+)?)(==|!=|>=|<=|>|<)(-?\d+(?:\.\d+)?)$/);
+    if (!comparisonMatch) {
+      throw new Error(`Unparseable expression: "${expr}"`);
+    }
+
     const [, left, operator, right] = comparisonMatch;
     const leftNum = parseFloat(left);
     const rightNum = parseFloat(right);
-    
+
     switch (operator) {
-      case '==': return leftNum === rightNum;
-      case '!=': return leftNum !== rightNum;
-      case '>=': return leftNum >= rightNum;
-      case '<=': return leftNum <= rightNum;
-      case '>': return leftNum > rightNum;
-      case '<': return leftNum < rightNum;
-      default: return false;
+      case '==':
+        return leftNum === rightNum;
+      case '!=':
+        return leftNum !== rightNum;
+      case '>=':
+        return leftNum >= rightNum;
+      case '<=':
+        return leftNum <= rightNum;
+      case '>':
+        return leftNum > rightNum;
+      case '<':
+        return leftNum < rightNum;
+      default:
+        return false;
     }
-  }
-  
-  // Handle boolean AND/OR with comparisons inside
-  // Pattern: (value1 operator value2) && (value3 operator value4)
-  // Split on && and || and evaluate each part.
-  
-  // Check for AND (&&)
-  if (cleaned.includes('&&')) {
-    const parts = cleaned.split('&&');
-    return parts.every(part => evaluateSafeExpression(part));
-  }
-  
-  // Check for OR (||)
-  if (cleaned.includes('||')) {
-    const parts = cleaned.split('||');
-    return parts.some(part => evaluateSafeExpression(part));
-  }
-  
-  // Check for NOT (!)
-  if (cleaned.startsWith('!')) {
-    return !evaluateSafeExpression(cleaned.slice(1));
-  }
-  
-  // Check for parentheses
-  if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
-    return evaluateSafeExpression(cleaned.slice(1, -1));
-  }
-  
-  // Fallback: try parsing as a simple comparison
-  const match = cleaned.match(/^([\d.]+)(==|!=|>=|<=|>|<)([\d.]+)$/);
-  if (match) {
-    const [, left, operator, right] = match;
-    const leftNum = parseFloat(left);
-    const rightNum = parseFloat(right);
-    
-    switch (operator) {
-      case '==': return leftNum === rightNum;
-      case '!=': return leftNum !== rightNum;
-      case '>=': return leftNum >= rightNum;
-      case '<=': return leftNum <= rightNum;
-      case '>': return leftNum > rightNum;
-      case '<': return leftNum < rightNum;
-      default: return false;
+  };
+
+  const parse = (input: string): boolean => {
+    const value = stripOuterParens(input);
+
+    const orIndex = findTopLevelOperator(value, '||');
+    if (orIndex !== -1) {
+      return parse(value.slice(0, orIndex)) || parse(value.slice(orIndex + 2));
     }
-  }
-  
-  // If we can't parse it, return false (safe default)
-  console.warn(`Unparseable expression: "${expr}"`);
-  return false;
+
+    const andIndex = findTopLevelOperator(value, '&&');
+    if (andIndex !== -1) {
+      return parse(value.slice(0, andIndex)) && parse(value.slice(andIndex + 2));
+    }
+
+    if (value.startsWith('!')) {
+      return !parse(value.slice(1));
+    }
+
+    return parseComparison(value);
+  };
+
+  return parse(cleaned);
 }
 
 /**

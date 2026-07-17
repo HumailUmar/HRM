@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EmployeeDocument, Employee, Department, Designation } from '../types';
 import { getEmployeeDocuments, saveEmployeeDocuments, getEmployees } from '../lib/storage';
+import { getGoogleAccessToken, getAuthHeaders } from '../lib/auth';
 import { 
   Upload, File, Trash2, Download, Eye, CheckCircle, XCircle, 
   Clock, Search, Filter, Plus, FileText, Image, FileArchive,
@@ -42,8 +43,6 @@ export default function Documents({ documents, setDocuments, employees, designat
   const [filterType, setFilterType] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const getToken = () => localStorage.getItem('google_access_token') || '';
-
   // Handle file upload
   const handleFileUpload = async (file: File) => {
     if (!selectedEmployee) {
@@ -54,7 +53,7 @@ export default function Documents({ documents, setDocuments, employees, designat
 
     setUploading(true);
     try {
-      const accessToken = getToken();
+      const accessToken = getGoogleAccessToken();
       if (!accessToken) {
         alert('Please sign in with Google to upload documents.');
         setUploading(false);
@@ -77,6 +76,7 @@ export default function Documents({ documents, setDocuments, employees, designat
 
       const response = await fetch('/api/drive/upload', {
         method: 'POST',
+        headers: getAuthHeaders('none'),
         body: formData,
       });
 

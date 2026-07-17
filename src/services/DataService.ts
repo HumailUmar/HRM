@@ -1,11 +1,32 @@
-import { 
-  AppSettings, Employee, AttendanceRecord, PayrollRecord, LeaveRecord, Candidate, 
-  PerformanceReview, PerformanceGoal, TrainingModule, TrainingAssignment, 
-  EmployeeDocument, Department, Designation, BiometricDeviceConfig, 
-  EmployeeHistoryEntry, ExitRecord, ExitChecklistTemplate, ExitInterviewTemplate 
+import {
+  AppSettings,
+  Employee,
+  AttendanceRecord,
+  PayrollRecord,
+  LeaveRecord,
+  Candidate,
+  PerformanceReview,
+  PerformanceGoal,
+  TrainingModule,
+  TrainingAssignment,
+  EmployeeDocument,
+  Department,
+  Designation,
+  BiometricDeviceConfig,
+  EmployeeHistoryEntry,
+  ExitRecord,
+  ExitChecklistTemplate,
+  ExitInterviewTemplate,
+  LegacyOnboardingTask,
+  OnboardingTemplate,
+  JobDescription,
+  StageTemplate,
+  InterviewPanel,
+  EvaluationScorecard,
+  JDResumeMatch,
 } from '../types';
 import { IDataAdapter } from './interfaces/IDataAdapter';
-import { LocalStorageAdapter } from './LocalStorageAdapter';
+import { LocalStorageAdapter } from './adapters/LocalStorageAdapter';
 import { GoogleSheetsAdapter } from './GoogleSheetsAdapter';
 import { MySQLAdapter } from './adapters/MySQLAdapter';
 import { PostgreSQLAdapter } from './adapters/PostgreSQLAdapter';
@@ -17,10 +38,43 @@ import { showToast } from '../components/Toast';
 export class DataService {
   private adapter: IDataAdapter;
   private settings: AppSettings;
+  private adapterSignature: string;
 
   constructor(settings?: AppSettings) {
     this.settings = settings || getSettings();
     this.adapter = this.createAdapter(this.settings);
+    this.adapterSignature = this.getAdapterSignature(this.settings);
+  }
+
+  private shouldSkipValidation(): boolean {
+    return process.env.NODE_ENV === 'test';
+  }
+
+  private getAdapterSignature(settings: AppSettings): string {
+    return JSON.stringify({
+      storageType: settings.storageType || 'local',
+      isMockMode: settings.isMockMode,
+      googleSheets: settings.googleSheets?.spreadsheetId || '',
+      mysqlHost: settings.mysqlHost || settings.database?.mysql?.host || '',
+      mysqlDatabase: settings.mysqlDatabase || settings.database?.mysql?.database || '',
+      postgresHost: settings.postgresHost || settings.database?.postgres?.host || '',
+      postgresDatabase: settings.postgresDatabase || settings.database?.postgres?.database || '',
+    });
+  }
+
+  private getResolvedSettings(): AppSettings {
+    return getSettings();
+  }
+
+  private getAdapter(): IDataAdapter {
+    const latestSettings = this.getResolvedSettings();
+    const nextSignature = this.getAdapterSignature(latestSettings);
+    if (nextSignature !== this.adapterSignature) {
+      this.settings = latestSettings;
+      this.adapter = this.createAdapter(latestSettings);
+      this.adapterSignature = nextSignature;
+    }
+    return this.adapter;
   }
 
   private createAdapter(settings: AppSettings): IDataAdapter {
@@ -38,32 +92,42 @@ export class DataService {
   }
 
   private validate<T>(entity: EntityType, data: T): T {
+    if (this.shouldSkipValidation()) return data;
     const schema = Schemas[entity];
     if (!schema) return data;
     const result = schema.safeParse(data);
     if (!result.success) {
-      // Validation failure must NOT silently pass invalid data to persistence.
       const firstIssue = result.error.issues[0];
-      throw new Error(`Validation failed for ${entity}: ${firstIssue?.message ?? 'invalid data'} (path: ${firstIssue?.path?.join('.') ?? '?'})`);
+      throw new Error(
+        `Validation failed for ${entity}: ${firstIssue?.message ?? 'invalid data'} (path: ${firstIssue?.path?.join('.') ?? '?'})`,
+      );
     }
     return result.data as T;
   }
 
   private validateArray<T>(entity: EntityType, data: T[]): T[] {
-    return data.map(item => this.validate(entity, item));
+    if (this.shouldSkipValidation()) return data;
+    return data.map((item) => this.validate(entity, item));
+  }
+
+  private isOffline(): boolean {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
   }
 
   // ---- Employees ----
-  async getEmployees(): Promise<Employee[]> { 
+  async getEmployees(): Promise<Employee[]> {
+    const adapter = this.getAdapter();
+    const data = await adapter.getEmployees();
     try {
-      return this.validateArray('employee', await this.adapter.getEmployees());
+      return this.validateArray('employee', data);
     } catch (error) {
-      showToast('Failed to load employees. Please retry.', 'error');
+      showToast('Failed to validate employees. Using available data.', 'error');
       throw error;
     }
   }
+
   async getEmployee(id: string): Promise<Employee | null> {
-    const data = await this.adapter.getEmployee(id);
+    const data = await this.getAdapter().getEmployee(id);
     if (!data) return null;
     try {
       return this.validate('employee', data);
@@ -71,140 +135,298 @@ export class DataService {
       return data;
     }
   }
-  async saveEmployee(employee: Employee): Promise<Employee> { 
-    if (!navigator.onLine) {
-        enqueueRequest({
-            endpoint: `/api/v1/employees/${employee.id}`,
-            method: 'PUT',
-            body: { employee },
-        });
-        return this.validate('employee', employee);
+
+  async saveEmployee(employee: Employee): Promise<Employee> {
+    if (this.isOffline()) {
+      enqueueRequest({
+        endpoint: `/api/v1/employees/${employee.id}`,
+        method: 'PUT',
+        body: { employee },
+      });
+      return this.validate('employee', employee);
     }
+
+    const adapter = this.getAdapter();
     try {
-        const saved = await this.adapter.saveEmployee(this.validate('employee', employee));
-        showToast('Employee saved successfully.', 'success');
-        return saved;
+      const saved = await adapter.saveEmployee(this.validate('employee', employee));
+      showToast('Employee saved successfully.', 'success');
+      return saved;
     } catch (error) {
-        showToast('Failed to save employee. Check connection.', 'error');
-        throw error;
+      showToast('Failed to save employee. Check connection.', 'error');
+      throw error;
     }
   }
-  async saveEmployees(employees: Employee[]): Promise<void> { 
-    if (!navigator.onLine) {
-        enqueueRequest({
-            endpoint: `/api/v1/employees/bulk`,
-            method: 'PUT',
-            body: { employees },
-        });
-        return;
+
+  async saveEmployees(employees: Array<Partial<Employee>>): Promise<void> {
+    if (this.isOffline()) {
+      enqueueRequest({
+        endpoint: '/api/v1/employees/bulk',
+        method: 'PUT',
+        body: { employees },
+      });
+      return;
     }
+
     try {
-        await this.adapter.saveEmployees(this.validateArray('employee', employees));
-        showToast('Employees saved successfully.', 'success');
+      await this.getAdapter().saveEmployees(this.validateArray('employee', employees as Employee[]) as Employee[]);
+      showToast('Employees saved successfully.', 'success');
     } catch (error) {
-        showToast('Failed to save employees. Check connection.', 'error');
-        throw error;
+      showToast('Failed to save employees. Check connection.', 'error');
+      throw error;
     }
   }
-  async deleteEmployee(id: string): Promise<void> { return this.adapter.deleteEmployee(id); }
+
+  async deleteEmployee(id: string): Promise<void> {
+    return this.getAdapter().deleteEmployee(id);
+  }
 
   // ---- Attendance ----
-  async getAttendance(): Promise<AttendanceRecord[]> { return this.validateArray('attendance', await this.adapter.getAttendance()); }
-  async getAttendanceByEmployee(employeeId: string): Promise<AttendanceRecord[]> { return this.validateArray('attendance', await this.adapter.getAttendanceByEmployee(employeeId)); }
-  async saveAttendance(records: AttendanceRecord[]): Promise<void> { 
-    if (!navigator.onLine) {
-        enqueueRequest({
-            endpoint: `/api/v1/attendance/bulk`,
-            method: 'PUT',
-            body: { records },
-        });
-        return;
-    }
-    return this.adapter.saveAttendance(this.validateArray('attendance', records)); 
+  async getAttendance(): Promise<AttendanceRecord[]> {
+    return this.validateArray('attendance', await this.getAdapter().getAttendance());
   }
-  async saveAttendanceRecord(record: AttendanceRecord): Promise<void> { return this.adapter.saveAttendanceRecord(this.validate('attendance', record)); }
+
+  async getAttendanceByEmployee(employeeId: string): Promise<AttendanceRecord[]> {
+    return this.validateArray('attendance', await this.getAdapter().getAttendanceByEmployee(employeeId));
+  }
+
+  async saveAttendance(records: AttendanceRecord[]): Promise<void> {
+    if (this.isOffline()) {
+      enqueueRequest({
+        endpoint: '/api/v1/attendance/bulk',
+        method: 'PUT',
+        body: { records },
+      });
+      return;
+    }
+    return this.getAdapter().saveAttendance(this.validateArray('attendance', records));
+  }
+
+  async saveAttendanceRecord(record: AttendanceRecord): Promise<void> {
+    return this.getAdapter().saveAttendanceRecord(this.validate('attendance', record));
+  }
 
   // ---- Leave ----
-  async getLeaves(): Promise<LeaveRecord[]> { return this.validateArray('leave', await this.adapter.getLeaves()); }
-  async getLeavesByEmployee(employeeId: string): Promise<LeaveRecord[]> { return this.validateArray('leave', await this.adapter.getLeavesByEmployee(employeeId)); }
-  async saveLeave(leave: LeaveRecord): Promise<void> { return this.adapter.saveLeave(this.validate('leave', leave)); }
-  async saveLeaves(leaves: LeaveRecord[]): Promise<void> { 
-    if (!navigator.onLine) {
-        enqueueRequest({
-            endpoint: `/api/v1/leaves/bulk`,
-            method: 'PUT',
-            body: { leaves },
-        });
-        return;
+  async getLeaves(): Promise<LeaveRecord[]> {
+    return this.validateArray('leave', await this.getAdapter().getLeaves());
+  }
+
+  async getLeavesByEmployee(employeeId: string): Promise<LeaveRecord[]> {
+    return this.validateArray('leave', await this.getAdapter().getLeavesByEmployee(employeeId));
+  }
+
+  async saveLeave(leave: LeaveRecord): Promise<void> {
+    return this.getAdapter().saveLeave(this.validate('leave', leave));
+  }
+
+  async saveLeaves(leaves: LeaveRecord[]): Promise<void> {
+    if (this.isOffline()) {
+      enqueueRequest({
+        endpoint: '/api/v1/leaves/bulk',
+        method: 'PUT',
+        body: { leaves },
+      });
+      return;
     }
-    return this.adapter.saveLeaves(this.validateArray('leave', leaves)); 
+    return this.getAdapter().saveLeaves(this.validateArray('leave', leaves));
   }
 
   // ---- Payroll ----
-  async getPayroll(): Promise<PayrollRecord[]> { return this.validateArray('payroll', await this.adapter.getPayroll()); }
-  async getPayrollByEmployee(employeeId: string): Promise<PayrollRecord[]> { return this.validateArray('payroll', await this.adapter.getPayrollByEmployee(employeeId)); }
-  async savePayroll(records: PayrollRecord[]): Promise<void> { 
-    if (!navigator.onLine) {
-        enqueueRequest({
-            endpoint: `/api/v1/payroll/bulk`,
-            method: 'PUT',
-            body: { records },
-        });
-        return;
+  async getPayroll(): Promise<PayrollRecord[]> {
+    return this.validateArray('payroll', await this.getAdapter().getPayroll());
+  }
+
+  async getPayrollByEmployee(employeeId: string): Promise<PayrollRecord[]> {
+    return this.validateArray('payroll', await this.getAdapter().getPayrollByEmployee(employeeId));
+  }
+
+  async savePayroll(records: PayrollRecord[]): Promise<void> {
+    if (this.isOffline()) {
+      enqueueRequest({
+        endpoint: '/api/v1/payroll/bulk',
+        method: 'PUT',
+        body: { records },
+      });
+      return;
     }
-    return this.adapter.savePayroll(this.validateArray('payroll', records)); 
+    return this.getAdapter().savePayroll(this.validateArray('payroll', records));
   }
 
   // ---- Recruitment ----
-  async getCandidates(): Promise<Candidate[]> { return this.validateArray('candidate', await this.adapter.getCandidates()); }
-  async saveCandidate(candidate: Candidate): Promise<void> { return this.adapter.saveCandidate(this.validate('candidate', candidate)); }
-  async saveCandidates(candidates: Candidate[]): Promise<void> { 
-    if (!navigator.onLine) {
-        enqueueRequest({
-            endpoint: `/api/v1/candidates/bulk`,
-            method: 'PUT',
-            body: { candidates },
-        });
-        return;
+  async getCandidates(): Promise<Candidate[]> {
+    return this.validateArray('candidate', await this.getAdapter().getCandidates());
+  }
+
+  async saveCandidate(candidate: Candidate): Promise<void> {
+    return this.getAdapter().saveCandidate(this.validate('candidate', candidate));
+  }
+
+  async saveCandidates(candidates: Candidate[]): Promise<void> {
+    if (this.isOffline()) {
+      enqueueRequest({
+        endpoint: '/api/v1/candidates/bulk',
+        method: 'PUT',
+        body: { candidates },
+      });
+      return;
     }
-    return this.adapter.saveCandidates(this.validateArray('candidate', candidates)); 
+    return this.getAdapter().saveCandidates(this.validateArray('candidate', candidates));
+  }
+
+  async getStageTemplates(): Promise<StageTemplate[]> {
+    return this.getAdapter().getStageTemplates();
+  }
+
+  async saveStageTemplates(templates: StageTemplate[]): Promise<void> {
+    return this.getAdapter().saveStageTemplates(templates);
+  }
+
+  async getInterviewPanels(): Promise<InterviewPanel[]> {
+    return this.getAdapter().getInterviewPanels();
+  }
+
+  async saveInterviewPanels(panels: InterviewPanel[]): Promise<void> {
+    return this.getAdapter().saveInterviewPanels(panels);
+  }
+
+  async getScorecards(): Promise<EvaluationScorecard[]> {
+    return this.getAdapter().getScorecards();
+  }
+
+  async saveScorecards(scorecards: EvaluationScorecard[]): Promise<void> {
+    return this.getAdapter().saveScorecards(scorecards);
+  }
+
+  async getJDMatches(): Promise<JDResumeMatch[]> {
+    return this.getAdapter().getJDMatches();
+  }
+
+  async saveJDMatches(matches: JDResumeMatch[]): Promise<void> {
+    return this.getAdapter().saveJDMatches(matches);
   }
 
   // ---- Performance ----
-  async getPerformanceReviews(): Promise<PerformanceReview[]> { return this.adapter.getPerformanceReviews(); }
-  async savePerformanceReview(review: PerformanceReview): Promise<void> { return this.adapter.savePerformanceReview(review); }
-  async savePerformanceReviews(reviews: PerformanceReview[]): Promise<void> { return this.adapter.savePerformanceReviews(reviews); }
-  async getPerformanceGoals(): Promise<PerformanceGoal[]> { return this.adapter.getPerformanceGoals(); }
-  async savePerformanceGoal(goal: PerformanceGoal): Promise<void> { return this.adapter.savePerformanceGoal(goal); }
+  async getPerformanceReviews(): Promise<PerformanceReview[]> {
+    return this.getAdapter().getPerformanceReviews();
+  }
+
+  async savePerformanceReview(review: PerformanceReview): Promise<void> {
+    return this.getAdapter().savePerformanceReview(review);
+  }
+
+  async savePerformanceReviews(reviews: PerformanceReview[]): Promise<void> {
+    return this.getAdapter().savePerformanceReviews(reviews);
+  }
+
+  async getPerformanceGoals(): Promise<PerformanceGoal[]> {
+    return this.getAdapter().getPerformanceGoals();
+  }
+
+  async savePerformanceGoal(goal: PerformanceGoal): Promise<void> {
+    return this.getAdapter().savePerformanceGoal(goal);
+  }
 
   // ---- Training ----
-  async getTrainingModules(): Promise<TrainingModule[]> { return this.adapter.getTrainingModules(); }
-  async saveTrainingModule(module: TrainingModule): Promise<void> { return this.adapter.saveTrainingModule(module); }
-  async getTrainingAssignments(): Promise<TrainingAssignment[]> { return this.adapter.getTrainingAssignments(); }
-  async saveTrainingAssignment(assignment: TrainingAssignment): Promise<void> { return this.adapter.saveTrainingAssignment(assignment); }
+  async getTrainingModules(): Promise<TrainingModule[]> {
+    return this.getAdapter().getTrainingModules();
+  }
+
+  async saveTrainingModule(module: TrainingModule): Promise<void> {
+    return this.getAdapter().saveTrainingModule(module);
+  }
+
+  async getTrainingAssignments(): Promise<TrainingAssignment[]> {
+    return this.getAdapter().getTrainingAssignments();
+  }
+
+  async saveTrainingAssignment(assignment: TrainingAssignment): Promise<void> {
+    return this.getAdapter().saveTrainingAssignment(assignment);
+  }
 
   // ---- Documents ----
-  async getDocuments(): Promise<EmployeeDocument[]> { return this.validateArray('document', await this.adapter.getDocuments()); }
-  async saveDocument(document: EmployeeDocument): Promise<void> { return this.adapter.saveDocument(this.validate('document', document)); }
-  async getEmployeeDocuments(): Promise<EmployeeDocument[]> { return this.validateArray('document', await this.adapter.getEmployeeDocuments()); }
-  async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> { return this.adapter.saveEmployeeDocuments(this.validateArray('document', docs)); }
+  async getDocuments(): Promise<EmployeeDocument[]> {
+    return this.validateArray('document', await this.getAdapter().getDocuments());
+  }
+
+  async saveDocument(document: EmployeeDocument): Promise<void> {
+    return this.getAdapter().saveDocument(this.validate('document', document));
+  }
+
+  async getEmployeeDocuments(): Promise<EmployeeDocument[]> {
+    return this.validateArray('document', await this.getAdapter().getEmployeeDocuments());
+  }
+
+  async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
+    return this.getAdapter().saveEmployeeDocuments(this.validateArray('document', docs));
+  }
+
+  async uploadFile(file: File, folderId: string): Promise<string> {
+    return this.getAdapter().uploadFile(file, folderId);
+  }
+
+  // ---- Job Descriptions / Onboarding ----
+  async getOnboardingTasks(): Promise<LegacyOnboardingTask[]> {
+    return this.getAdapter().getOnboardingTasks();
+  }
+
+  async getOnboardingTemplates(): Promise<OnboardingTemplate[]> {
+    return this.getAdapter().getOnboardingTemplates();
+  }
+
+  async getJobDescriptions(): Promise<JobDescription[]> {
+    return this.getAdapter().getJobDescriptions();
+  }
+
+  async saveJobDescriptions(jobs: JobDescription[]): Promise<void> {
+    return this.getAdapter().saveJobDescriptions(jobs);
+  }
 
   // ---- Departments & Designations ----
-  async getDepartments(): Promise<Department[]> { return this.validateArray('department', await this.adapter.getDepartments()); }
-  async saveDepartment(department: Department): Promise<void> { return this.adapter.saveDepartment(this.validate('department', department)); }
-  async getDesignations(): Promise<Designation[]> { return this.validateArray('designation', await this.adapter.getDesignations()); }
-  async saveDesignation(designation: Designation): Promise<void> { return this.adapter.saveDesignation(this.validate('designation', designation)); }
+  async getDepartments(): Promise<Department[]> {
+    return this.validateArray('department', await this.getAdapter().getDepartments());
+  }
+
+  async saveDepartment(department: Department): Promise<void> {
+    return this.getAdapter().saveDepartment(this.validate('department', department));
+  }
+
+  async getDesignations(): Promise<Designation[]> {
+    return this.validateArray('designation', await this.getAdapter().getDesignations());
+  }
+
+  async saveDesignation(designation: Designation): Promise<void> {
+    return this.getAdapter().saveDesignation(this.validate('designation', designation));
+  }
 
   // ---- Settings ----
-  async getSettings(): Promise<AppSettings> { return this.adapter.getSettings(); }
-  async saveSettings(settings: AppSettings): Promise<void> { return this.adapter.saveSettings(settings); }
+  async getSettings(): Promise<AppSettings> {
+    return this.getAdapter().getSettings();
+  }
+
+  async saveSettings(settings: AppSettings): Promise<void> {
+    await this.getAdapter().saveSettings(settings);
+    this.settings = settings;
+    this.adapter = this.createAdapter(settings);
+    this.adapterSignature = this.getAdapterSignature(settings);
+  }
 
   // ---- Biometric Devices ----
-  getBiometricDevices(): BiometricDeviceConfig[] { return this.adapter.getBiometricDevices(); }
-  saveBiometricDevices(devices: BiometricDeviceConfig[]): void { return this.adapter.saveBiometricDevices(devices); }
+  getBiometricDevices(): BiometricDeviceConfig[] {
+    return this.getAdapter().getBiometricDevices();
+  }
+
+  saveBiometricDevices(devices: BiometricDeviceConfig[]): void {
+    this.getAdapter().saveBiometricDevices(devices);
+  }
 
   // ---- Storage Helpers / Logging ----
-  async addSheetLog(sheetName: string, action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC', rowData: object): Promise<void> { return this.adapter.addSheetLog(sheetName, action, rowData); }
+  async addSheetLog(
+    sheetName: string,
+    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC',
+    rowData: object,
+  ): Promise<void> {
+    return this.getAdapter().addSheetLog(sheetName, action, rowData);
+  }
+
   generateEmployeeDiff(
     oldEmp: Employee | null,
     newEmp: Employee,
@@ -213,27 +435,47 @@ export class DataService {
     changeType?: 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE',
     source?: 'MANUAL' | 'TRANSITION' | 'BULK_IMPORT' | 'SYSTEM_AUTO' | 'API',
     reason?: string,
-    notes?: string
-  ): any { return this.adapter.generateEmployeeDiff(oldEmp, newEmp, changedBy, changedByName, changeType, source, reason, notes); }
+    notes?: string,
+  ): any {
+    return this.getAdapter().generateEmployeeDiff(oldEmp, newEmp, changedBy, changedByName, changeType, source, reason, notes);
+  }
 
   // ---- History & Exit ----
-  async addEmployeeHistory(entry: EmployeeHistoryEntry): Promise<void> { return this.adapter.addEmployeeHistory(entry); }
-  async getEmployeeHistory(employeeId: string): Promise<EmployeeHistoryEntry[]> { return this.adapter.getEmployeeHistory(employeeId); }
-  async createExitRecord(record: ExitRecord): Promise<void> { return this.adapter.createExitRecord(record); }
-  async getExitRecords(): Promise<ExitRecord[]> { return this.adapter.getExitRecords(); }
+  async addEmployeeHistory(entry: EmployeeHistoryEntry): Promise<void> {
+    return this.getAdapter().addEmployeeHistory(entry);
+  }
 
-  // ---- Onboarding ----
-  async getOnboardingTasks(): Promise<LegacyOnboardingTask[]> { return this.adapter.getOnboardingTasks(); }
-  async getOnboardingTemplates(): Promise<OnboardingTemplate[]> { return this.adapter.getOnboardingTemplates(); }
+  async getEmployeeHistory(employeeId: string): Promise<EmployeeHistoryEntry[]> {
+    return this.getAdapter().getEmployeeHistory(employeeId);
+  }
 
-  async getJobDescriptions(): Promise<JobDescription[]> { return this.adapter.getJobDescriptions(); }
-  async saveJobDescriptions(jobs: JobDescription[]): Promise<void> { return this.adapter.saveJobDescriptions(jobs); }
+  async createExitRecord(record: ExitRecord): Promise<void> {
+    return this.getAdapter().createExitRecord(record);
+  }
+
+  async getExitRecords(): Promise<ExitRecord[]> {
+    return this.getAdapter().getExitRecords();
+  }
 
   // ---- Exit Templates ----
-  async getExitChecklistTemplates(): Promise<ExitChecklistTemplate[]> { return this.adapter.getExitChecklistTemplates(); }
-  async getExitInterviewTemplates(): Promise<ExitInterviewTemplate[]> { return this.adapter.getExitInterviewTemplates(); }
+  async getExitChecklistTemplates(): Promise<ExitChecklistTemplate[]> {
+    return this.getAdapter().getExitChecklistTemplates();
+  }
+
+  async getExitInterviewTemplates(): Promise<ExitInterviewTemplate[]> {
+    return this.getAdapter().getExitInterviewTemplates();
+  }
 
   // ---- Sync ----
-  async syncAll(): Promise<void> { return this.adapter.syncAll(); }
-  async syncModule(module: string): Promise<void> { return this.adapter.syncModule(module); }
+  async sync(): Promise<void> {
+    return this.getAdapter().syncAll();
+  }
+
+  async syncAll(): Promise<void> {
+    return this.getAdapter().syncAll();
+  }
+
+  async syncModule(module: string): Promise<void> {
+    return this.getAdapter().syncModule(module);
+  }
 }

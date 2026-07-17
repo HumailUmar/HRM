@@ -7,7 +7,8 @@ import {
   RefreshCw, LogOut, Calendar, Server, Cloud, AlertCircle, 
   Check, Loader2, HardDrive, Info, DollarSign 
 } from 'lucide-react';
-import { migrateLocalDataToGSheets, getSettings } from '../lib/storage';
+import { migrateLocalDataToGSheets, getSettings, saveSettings } from '../lib/storage';
+import { getGoogleAccessToken } from '../lib/auth';
 import { getSyncTracker, clearSyncTracker, updateSyncTracker } from '../lib/syncTracker';
 import { refreshDataAdapter } from '../services';
 import BulkImport from './BulkImport';
@@ -189,9 +190,10 @@ export default function Settings({
       }
     };
     
+    saveSettings(updated);
     setSettings(updated);
     refreshDataAdapter();
-    
+
     if (type === 'local') {
       setStatusBarMessage("Storage Engine updated successfully to Local Storage (Browser Cache Persistence Mode).");
     } else if (type === 'google-sheets') {
@@ -234,6 +236,7 @@ export default function Settings({
       }
     };
 
+    saveSettings(updated);
     setSettings(updated);
     refreshDataAdapter();
     alert("System configurations and Google Sheets endpoints saved successfully!");
@@ -839,7 +842,7 @@ export default function Settings({
       {showSetupWizard && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
           <GoogleSheetsSetupWizard
-            accessToken={user?.accessToken || user?.token || ""}
+            accessToken={getGoogleAccessToken() || ''}
             onComplete={() => {
               setShowSetupWizard(false);
               const latestSettings = getSettings();

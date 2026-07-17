@@ -2,7 +2,7 @@ import { IDataAdapter } from './interfaces/IDataAdapter';
 import {
   Employee, AttendanceRecord, PayrollRecord, LeaveRecord, Candidate,
   Department, Designation, EmployeeDocument, SuccessionPlan, LegacyOnboardingTask,
-  OrgChartNode, JobDescription, JDResumeMatch, WhatsAppMessage, WhatsAppTemplate,
+  OnboardingTemplate, OrgChartNode, JobDescription, JDResumeMatch, WhatsAppMessage, WhatsAppTemplate,
   InterviewSchedule, LeavePolicy, Shift, ShiftAssignment, ShiftSwapRequest,
   ShiftTemplate, Currency, TaxRule, StatutoryDeduction, PayrollCalculation,
   PerformanceReviewCycle, PerformanceReview, PerformanceGoal, TrainingModule,
@@ -287,6 +287,26 @@ export class GoogleSheetsAdapter implements IDataAdapter {
       const rows = docs.map(serializeEmployeeDocument);
       await updateSheet('HumailEli_Employee_Documents', 'A1', [DOCUMENTS_HEADERS, ...rows]);
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
+  }
+
+  async getEmployeeDocuments(): Promise<EmployeeDocument[]> {
+    return this.getDocuments();
+  }
+
+  async getJobDescriptions(): Promise<JobDescription[]> {
+    return this.localFallback.getJobDescriptions();
+  }
+
+  async saveJobDescriptions(jobs: JobDescription[]): Promise<void> {
+    return this.localFallback.saveJobDescriptions(jobs);
+  }
+
+  async getOnboardingTasks(): Promise<LegacyOnboardingTask[]> {
+    return this.localFallback.getOnboardingTasks();
+  }
+
+  async getOnboardingTemplates(): Promise<OnboardingTemplate[]> {
+    return this.localFallback.getOnboardingTemplates();
   }
 
   // BIOMETRIC DEVICES
