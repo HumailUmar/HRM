@@ -419,6 +419,13 @@ export default function Employees({
 
     const updated = [newEmp, ...employees];
     setEmployees(updated);
+
+    // Persist the new employee to the backend immediately.
+    try {
+      await data.saveEmployee(newEmp);
+    } catch (persistErr) {
+      logger.error('Failed to persist new employee to backend; kept in local state:', persistErr);
+    }
     
     // Log to simulated sheet
     data.addSheetLog("HumailEli_Employees", "INSERT", {
@@ -504,6 +511,14 @@ export default function Employees({
     }
   };
 
+
+  const [empHistory, setEmpHistory] = useState<EmployeeHistoryEntry[]>([]);
+
+  useEffect(() => {
+    if (selectedEmployee && detailsTab === 'history') {
+      data.getEmployeeHistory(selectedEmployee.id).then(setEmpHistory).catch(() => setEmpHistory([]));
+    }
+  }, [selectedEmployee?.id, detailsTab, data]);
 
   const [showDocUploadModal, setShowDocUploadModal] = useState(false);
 
@@ -662,7 +677,8 @@ export default function Employees({
 
         if ((onboarding.contractSigned && onboarding.trainingCompleted && onboarding.welcomeEmailSent) || allTemplateTasksDone) {
           status = 'Active';
-          const hasTimelineEvent = emp.journeyTimeline?.some(evt => evt.title === "Onboarding Fully Completed");
+          const currentTimeline = [...(emp.journeyTimeline || [])];
+          const hasTimelineEvent = currentTimeline.some(evt => evt.title === "Onboarding Fully Completed");
           if (!hasTimelineEvent) {
             const completedEvent: TimelineEvent = {
               id: `EVT-${Date.now()}-done`,
@@ -673,8 +689,9 @@ export default function Employees({
                 ? `Completed all ${totalTemplateTasks} template tasks of "${template?.name}" successfully!`
                 : "Completed all fundamental onboarding milestones successfully!"
             };
-            emp.journeyTimeline = [completedEvent, ...(emp.journeyTimeline || [])];
+            currentTimeline.unshift(completedEvent);
           }
+          emp.journeyTimeline = currentTimeline;
         } else {
           status = 'Onboarding';
         }
@@ -2340,21 +2357,12 @@ export default function Employees({
                   </div>
                   
                   <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
-                    {(() => {
-                      const [empHistory, setEmpHistory] = useState<EmployeeHistoryEntry[]>([]);
-                      useEffect(() => {
-                        data.getEmployeeHistory(selectedEmployee.id).then(setEmpHistory);
-                      }, [selectedEmployee.id]);
-                      
-                      if (empHistory.length === 0) {
-                        return (
-                          <div className="text-center py-6 bg-slate-50 border border-slate-100 rounded-xl text-slate-400 text-xs font-medium relative z-10">
-                            No history available for this employee.
-                          </div>
-                        );
-                      }
-                      
-                      return empHistory.map(h => {
+                    {empHistory.length === 0 ? (
+                      <div className="text-center py-6 bg-slate-50 border border-slate-100 rounded-xl text-slate-400 text-xs font-medium relative z-10">
+                        No history available for this employee.
+                      </div>
+                    ) : (
+                      empHistory.map(h => {
                         const isAdd = h.changeType === 'CREATE';
                         const isDel = h.changeType === 'DELETE';
                         
@@ -2395,8 +2403,8 @@ export default function Employees({
                             </div>
                           </div>
                         );
-                      });
-                    })()}
+                      })
+                    )}
                   </div>
                 </div>
               )}
@@ -2708,9 +2716,8 @@ export default function Employees({
                   const updatedEmps = employees.map(emp => emp.id === selectedEmployee.id ? updatedEmp : emp);
                   const diffs = data.generateEmployeeDiff(selectedEmployee, updatedEmp, 'currentUser', 'Current User', 'UPDATE', 'TRANSITION', statusReason);
                   if (diffs.length > 0) {
-                    for (const d of diffs) {
-                        await data.addEmployeeHistory(d);
-                    }
+                    // Use Promise.allSettled so one failure doesn't block the rest.
+                    await Promise.allSettled(diffs.map(d => data.addEmployeeHistory(d)));
                   }
                   setEmployees(updatedEmps);
                   setSelectedEmployee(updatedEmp);
@@ -2769,9 +2776,7 @@ export default function Employees({
                     return emp;
                   });
                   if (allDiffs.length > 0) {
-                    for (const d of allDiffs) {
-                        await data.addEmployeeHistory(d);
-                    }
+                    await Promise.allSettled(allDiffs.map(d => data.addEmployeeHistory(d)));
                   }
                   setEmployees(updatedEmps);
                   setShowBulkStatusModal(false);

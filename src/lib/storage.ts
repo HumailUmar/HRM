@@ -2108,11 +2108,15 @@ export async function fetchStatusHistoryFromGSheet(): Promise<EmployeeStatusHist
 }
 
 export async function syncStatusHistoryToGSheet(sh: EmployeeStatusHistory): Promise<void> {
-  const rowIndex = await findRowById('HumailEli_Status_History', sh.id);
-  if (rowIndex !== -1) {
-    await updateSheet('HumailEli_Status_History', `A${rowIndex}:J${rowIndex}`, [serializeStatusHistory(sh)]);
-  } else {
-    await appendToSheet('HumailEli_Status_History', [serializeStatusHistory(sh)]);
+  try {
+    const rowIndex = await findRowById('HumailEli_Status_History', sh.id);
+    if (rowIndex !== -1) {
+      await updateSheet('HumailEli_Status_History', `A${rowIndex}:J${rowIndex}`, [serializeStatusHistory(sh)]);
+    } else {
+      await appendToSheet('HumailEli_Status_History', [serializeStatusHistory(sh)]);
+    }
+  } catch (error) {
+    logger.error('syncStatusHistoryToGSheet error:', error);
   }
 }
 
