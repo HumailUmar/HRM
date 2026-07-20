@@ -7,7 +7,10 @@ import {
   ShiftTemplate, Currency, TaxRule, StatutoryDeduction, PayrollCalculation,
   PerformanceReviewCycle, PerformanceReview, PerformanceGoal, TrainingModule,
   TrainingSubmission, ExitRecord, SalaryStructure, PayGrade, SalaryRevision,
-  AppSettings, TrainingAssignment
+  AppSettings, TrainingAssignment, ExitProcessStage, SettlementConfig,
+  PerformanceReviewTemplate, PeerAssignment, TrainingRequest, TrainingMentorship,
+  TrainingCheckIn, TrainingMessage, SalaryComponent, RecruitmentAnalytics,
+  HireDetails, SheetLog, EmployeeStatusHistory
 } from '../types';
 import {
   BiometricDeviceConfig, StageTemplate, InterviewPanel, EvaluationScorecard,
@@ -352,6 +355,11 @@ export class GoogleSheetsAdapter implements IDataAdapter {
     return this.getDocuments();
   }
 
+  async getEmployeeDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]> {
+    const docs = await this.getDocuments();
+    return docs.filter(d => d.employeeId === employeeId);
+  }
+
   async getJobDescriptions(): Promise<JobDescription[]> {
     return this.localFallback.getJobDescriptions();
   }
@@ -455,6 +463,270 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   }
   async saveSettings(settings: AppSettings): Promise<void> {
     return this.localFallback.saveSettings(settings);
+  }
+
+  async getExitProcessStages(): Promise<ExitProcessStage[]> {
+    return this.localFallback.getExitProcessStages();
+  }
+
+  async saveExitProcessStages(stages: ExitProcessStage[]): Promise<void> {
+    return this.localFallback.saveExitProcessStages(stages);
+  }
+
+  async getSettlementConfig(): Promise<SettlementConfig | null> {
+    return this.localFallback.getSettlementConfig();
+  }
+
+  async saveSettlementConfig(config: SettlementConfig): Promise<void> {
+    return this.localFallback.saveSettlementConfig(config);
+  }
+
+  async getPerformanceReviewCycles(): Promise<PerformanceReviewCycle[]> {
+    return this.localFallback.getPerformanceReviewCycles();
+  }
+
+  async savePerformanceReviewCycles(cycles: PerformanceReviewCycle[]): Promise<void> {
+    return this.localFallback.savePerformanceReviewCycles(cycles);
+  }
+
+  async getPerformanceReviewTemplates(): Promise<PerformanceReviewTemplate[]> {
+    return this.localFallback.getPerformanceReviewTemplates();
+  }
+
+  async savePerformanceReviewTemplates(templates: PerformanceReviewTemplate[]): Promise<void> {
+    return this.localFallback.savePerformanceReviewTemplates(templates);
+  }
+
+  async getTrainingSubmissions(): Promise<TrainingSubmission[]> {
+    return this.localFallback.getTrainingSubmissions();
+  }
+
+  async saveTrainingSubmissions(submissions: TrainingSubmission[]): Promise<void> {
+    return this.localFallback.saveTrainingSubmissions(submissions);
+  }
+
+  async getPeerAssignments(): Promise<PeerAssignment[]> {
+    return this.localFallback.getPeerAssignments();
+  }
+
+  async savePeerAssignments(assignments: PeerAssignment[]): Promise<void> {
+    return this.localFallback.savePeerAssignments(assignments);
+  }
+
+  async getTrainingRequests(): Promise<TrainingRequest[]> {
+    return this.localFallback.getTrainingRequests();
+  }
+
+  async saveTrainingRequests(requests: TrainingRequest[]): Promise<void> {
+    return this.localFallback.saveTrainingRequests(requests);
+  }
+
+  async getTrainingMentorships(): Promise<TrainingMentorship[]> {
+    return this.localFallback.getTrainingMentorships();
+  }
+
+  async saveTrainingMentorships(mentorships: TrainingMentorship[]): Promise<void> {
+    return this.localFallback.saveTrainingMentorships(mentorships);
+  }
+
+  async getTrainingCheckIns(): Promise<TrainingCheckIn[]> {
+    return this.localFallback.getTrainingCheckIns();
+  }
+
+  async saveTrainingCheckIns(checkIns: TrainingCheckIn[]): Promise<void> {
+    return this.localFallback.saveTrainingCheckIns(checkIns);
+  }
+
+  async getTrainingMessages(): Promise<TrainingMessage[]> {
+    return this.localFallback.getTrainingMessages();
+  }
+
+  async saveTrainingMessages(messages: TrainingMessage[]): Promise<void> {
+    return this.localFallback.saveTrainingMessages(messages);
+  }
+
+  async getSalaryComponents(): Promise<SalaryComponent[]> {
+    return this.localFallback.getSalaryComponents();
+  }
+
+  async saveSalaryComponents(components: SalaryComponent[]): Promise<void> {
+    return this.localFallback.saveSalaryComponents(components);
+  }
+
+  async getSalaryStructures(): Promise<SalaryStructure[]> {
+    return this.localFallback.getSalaryStructures();
+  }
+
+  async saveSalaryStructures(structures: SalaryStructure[]): Promise<void> {
+    return this.localFallback.saveSalaryStructures(structures);
+  }
+
+  async getPayGrades(): Promise<PayGrade[]> {
+    return this.localFallback.getPayGrades();
+  }
+
+  async savePayGrades(payGrades: PayGrade[]): Promise<void> {
+    return this.localFallback.savePayGrades(payGrades);
+  }
+
+  async getSalaryRevisions(): Promise<SalaryRevision[]> {
+    return this.localFallback.getSalaryRevisions();
+  }
+
+  async saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void> {
+    return this.localFallback.saveSalaryRevisions(revisions);
+  }
+
+  async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
+    return this.localFallback.getSalaryRevisionsByEmployee(employeeId);
+  }
+
+  async getShifts(): Promise<Shift[]> {
+    return this.localFallback.getShifts();
+  }
+
+  async saveShifts(shifts: Shift[]): Promise<void> {
+    return this.localFallback.saveShifts(shifts);
+  }
+
+  async getShiftAssignments(): Promise<ShiftAssignment[]> {
+    return this.localFallback.getShiftAssignments();
+  }
+
+  async saveShiftAssignments(assignments: ShiftAssignment[]): Promise<void> {
+    return this.localFallback.saveShiftAssignments(assignments);
+  }
+
+  async getShiftSwapRequests(): Promise<ShiftSwapRequest[]> {
+    return this.localFallback.getShiftSwapRequests();
+  }
+
+  async saveShiftSwapRequests(requests: ShiftSwapRequest[]): Promise<void> {
+    return this.localFallback.saveShiftSwapRequests(requests);
+  }
+
+  async getShiftTemplates(): Promise<ShiftTemplate[]> {
+    return this.localFallback.getShiftTemplates();
+  }
+
+  async saveShiftTemplates(templates: ShiftTemplate[]): Promise<void> {
+    return this.localFallback.saveShiftTemplates(templates);
+  }
+
+  async getCurrencies(): Promise<Currency[]> {
+    return this.localFallback.getCurrencies();
+  }
+
+  async saveCurrencies(currencies: Currency[]): Promise<void> {
+    return this.localFallback.saveCurrencies(currencies);
+  }
+
+  async getTaxRules(): Promise<TaxRule[]> {
+    return this.localFallback.getTaxRules();
+  }
+
+  async saveTaxRules(rules: TaxRule[]): Promise<void> {
+    return this.localFallback.saveTaxRules(rules);
+  }
+
+  async getStatutoryDeductions(): Promise<StatutoryDeduction[]> {
+    return this.localFallback.getStatutoryDeductions();
+  }
+
+  async saveStatutoryDeductions(deductions: StatutoryDeduction[]): Promise<void> {
+    return this.localFallback.saveStatutoryDeductions(deductions);
+  }
+
+  async getPayrollCalculations(): Promise<PayrollCalculation[]> {
+    return this.localFallback.getPayrollCalculations();
+  }
+
+  async savePayrollCalculations(calculations: PayrollCalculation[]): Promise<void> {
+    return this.localFallback.savePayrollCalculations(calculations);
+  }
+
+  async getLeavePolicies(): Promise<LeavePolicy[]> {
+    return this.localFallback.getLeavePolicies();
+  }
+
+  async saveLeavePolicies(policies: LeavePolicy[]): Promise<void> {
+    return this.localFallback.saveLeavePolicies(policies);
+  }
+
+  async getLeaveTypeConfigs(): Promise<any[]> {
+    return this.localFallback.getLeaveTypeConfigs();
+  }
+
+  async saveLeaveTypeConfigs(configs: any[]): Promise<void> {
+    return this.localFallback.saveLeaveTypeConfigs(configs);
+  }
+
+  async getRecruitmentAnalytics(): Promise<RecruitmentAnalytics[]> {
+    return this.localFallback.getRecruitmentAnalytics();
+  }
+
+  async saveRecruitmentAnalytics(analytics: RecruitmentAnalytics[]): Promise<void> {
+    return this.localFallback.saveRecruitmentAnalytics(analytics);
+  }
+
+  async getHires(): Promise<HireDetails[]> {
+    return this.localFallback.getHires();
+  }
+
+  async saveHires(hires: HireDetails[]): Promise<void> {
+    return this.localFallback.saveHires(hires);
+  }
+
+  async getInterviewSchedules(): Promise<InterviewSchedule[]> {
+    return this.localFallback.getInterviewSchedules();
+  }
+
+  async saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void> {
+    return this.localFallback.saveInterviewSchedules(schedules);
+  }
+
+  async getOrgChartNodes(): Promise<OrgChartNode[]> {
+    return this.localFallback.getOrgChartNodes();
+  }
+
+  async saveOrgChartNodes(nodes: OrgChartNode[]): Promise<void> {
+    return this.localFallback.saveOrgChartNodes(nodes);
+  }
+
+  async getPayslips(): Promise<any[]> {
+    return this.localFallback.getPayslips();
+  }
+
+  async savePayslips(payslips: any[]): Promise<void> {
+    return this.localFallback.savePayslips(payslips);
+  }
+
+  async getNotifications(): Promise<any[]> {
+    return this.localFallback.getNotifications();
+  }
+
+  async saveNotifications(notifications: any[]): Promise<void> {
+    return this.localFallback.saveNotifications(notifications);
+  }
+
+  async getUsers(): Promise<any[]> {
+    return this.localFallback.getUsers();
+  }
+
+  async saveUsers(users: any[]): Promise<void> {
+    return this.localFallback.saveUsers(users);
+  }
+
+  async getStatusHistory(): Promise<EmployeeStatusHistory[]> {
+    return this.localFallback.getStatusHistory();
+  }
+
+  async saveStatusHistory(history: EmployeeStatusHistory[]): Promise<void> {
+    return this.localFallback.saveStatusHistory(history);
+  }
+
+  async getSheetLogs(): Promise<SheetLog[]> {
+    return this.localFallback.getSheetLogs();
   }
 
   // ============================================================

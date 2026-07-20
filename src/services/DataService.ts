@@ -24,6 +24,35 @@ import {
   InterviewPanel,
   EvaluationScorecard,
   JDResumeMatch,
+  ExitProcessStage,
+  SettlementConfig,
+  PerformanceReviewCycle,
+  PerformanceReviewTemplate,
+  TrainingSubmission,
+  PeerAssignment,
+  TrainingRequest,
+  TrainingMentorship,
+  TrainingCheckIn,
+  TrainingMessage,
+  SalaryComponent,
+  SalaryStructure,
+  PayGrade,
+  SalaryRevision,
+  Shift,
+  ShiftAssignment,
+  ShiftSwapRequest,
+  ShiftTemplate,
+  Currency,
+  TaxRule,
+  StatutoryDeduction,
+  PayrollCalculation,
+  LeavePolicy,
+  RecruitmentAnalytics,
+  HireDetails,
+  InterviewSchedule,
+  OrgChartNode,
+  SheetLog,
+  EmployeeStatusHistory,
 } from '../types';
 import { IDataAdapter } from './interfaces/IDataAdapter';
 import { LocalStorageAdapter } from './adapters/LocalStorageAdapter';
@@ -363,6 +392,10 @@ export class DataService {
     return this.validateArray('document', await this.getAdapter().getEmployeeDocuments());
   }
 
+  async getEmployeeDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]> {
+    return this.validateArray('document', await this.getAdapter().getEmployeeDocumentsByEmployee(employeeId));
+  }
+
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
     return this.getAdapter().saveEmployeeDocuments(this.validateArray('document', docs));
   }
@@ -472,6 +505,270 @@ export class DataService {
 
   async getExitInterviewTemplates(): Promise<ExitInterviewTemplate[]> {
     return this.getAdapter().getExitInterviewTemplates();
+  }
+
+  async getExitProcessStages(): Promise<ExitProcessStage[]> {
+    return this.getAdapter().getExitProcessStages();
+  }
+
+  async saveExitProcessStages(stages: ExitProcessStage[]): Promise<void> {
+    return this.getAdapter().saveExitProcessStages(stages);
+  }
+
+  async getSettlementConfig(): Promise<SettlementConfig | null> {
+    return this.getAdapter().getSettlementConfig();
+  }
+
+  async saveSettlementConfig(config: SettlementConfig): Promise<void> {
+    return this.getAdapter().saveSettlementConfig(config);
+  }
+
+  async getPerformanceReviewCycles(): Promise<PerformanceReviewCycle[]> {
+    return this.getAdapter().getPerformanceReviewCycles();
+  }
+
+  async savePerformanceReviewCycles(cycles: PerformanceReviewCycle[]): Promise<void> {
+    return this.getAdapter().savePerformanceReviewCycles(cycles);
+  }
+
+  async getPerformanceReviewTemplates(): Promise<PerformanceReviewTemplate[]> {
+    return this.getAdapter().getPerformanceReviewTemplates();
+  }
+
+  async savePerformanceReviewTemplates(templates: PerformanceReviewTemplate[]): Promise<void> {
+    return this.getAdapter().savePerformanceReviewTemplates(templates);
+  }
+
+  async getTrainingSubmissions(): Promise<TrainingSubmission[]> {
+    return this.getAdapter().getTrainingSubmissions();
+  }
+
+  async saveTrainingSubmissions(submissions: TrainingSubmission[]): Promise<void> {
+    return this.getAdapter().saveTrainingSubmissions(submissions);
+  }
+
+  async getPeerAssignments(): Promise<PeerAssignment[]> {
+    return this.getAdapter().getPeerAssignments();
+  }
+
+  async savePeerAssignments(assignments: PeerAssignment[]): Promise<void> {
+    return this.getAdapter().savePeerAssignments(assignments);
+  }
+
+  async getTrainingRequests(): Promise<TrainingRequest[]> {
+    return this.getAdapter().getTrainingRequests();
+  }
+
+  async saveTrainingRequests(requests: TrainingRequest[]): Promise<void> {
+    return this.getAdapter().saveTrainingRequests(requests);
+  }
+
+  async getTrainingMentorships(): Promise<TrainingMentorship[]> {
+    return this.getAdapter().getTrainingMentorships();
+  }
+
+  async saveTrainingMentorships(mentorships: TrainingMentorship[]): Promise<void> {
+    return this.getAdapter().saveTrainingMentorships(mentorships);
+  }
+
+  async getTrainingCheckIns(): Promise<TrainingCheckIn[]> {
+    return this.getAdapter().getTrainingCheckIns();
+  }
+
+  async saveTrainingCheckIns(checkIns: TrainingCheckIn[]): Promise<void> {
+    return this.getAdapter().saveTrainingCheckIns(checkIns);
+  }
+
+  async getTrainingMessages(): Promise<TrainingMessage[]> {
+    return this.getAdapter().getTrainingMessages();
+  }
+
+  async saveTrainingMessages(messages: TrainingMessage[]): Promise<void> {
+    return this.getAdapter().saveTrainingMessages(messages);
+  }
+
+  async getSalaryComponents(): Promise<SalaryComponent[]> {
+    return this.getAdapter().getSalaryComponents();
+  }
+
+  async saveSalaryComponents(components: SalaryComponent[]): Promise<void> {
+    return this.getAdapter().saveSalaryComponents(components);
+  }
+
+  async getSalaryStructures(): Promise<SalaryStructure[]> {
+    return this.getAdapter().getSalaryStructures();
+  }
+
+  async saveSalaryStructures(structures: SalaryStructure[]): Promise<void> {
+    return this.getAdapter().saveSalaryStructures(structures);
+  }
+
+  async getPayGrades(): Promise<PayGrade[]> {
+    return this.getAdapter().getPayGrades();
+  }
+
+  async savePayGrades(payGrades: PayGrade[]): Promise<void> {
+    return this.getAdapter().savePayGrades(payGrades);
+  }
+
+  async getSalaryRevisions(): Promise<SalaryRevision[]> {
+    return this.getAdapter().getSalaryRevisions();
+  }
+
+  async saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void> {
+    return this.getAdapter().saveSalaryRevisions(revisions);
+  }
+
+  async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
+    return this.getAdapter().getSalaryRevisionsByEmployee(employeeId);
+  }
+
+  async getShifts(): Promise<Shift[]> {
+    return this.getAdapter().getShifts();
+  }
+
+  async saveShifts(shifts: Shift[]): Promise<void> {
+    return this.getAdapter().saveShifts(shifts);
+  }
+
+  async getShiftAssignments(): Promise<ShiftAssignment[]> {
+    return this.getAdapter().getShiftAssignments();
+  }
+
+  async saveShiftAssignments(assignments: ShiftAssignment[]): Promise<void> {
+    return this.getAdapter().saveShiftAssignments(assignments);
+  }
+
+  async getShiftSwapRequests(): Promise<ShiftSwapRequest[]> {
+    return this.getAdapter().getShiftSwapRequests();
+  }
+
+  async saveShiftSwapRequests(requests: ShiftSwapRequest[]): Promise<void> {
+    return this.getAdapter().saveShiftSwapRequests(requests);
+  }
+
+  async getShiftTemplates(): Promise<ShiftTemplate[]> {
+    return this.getAdapter().getShiftTemplates();
+  }
+
+  async saveShiftTemplates(templates: ShiftTemplate[]): Promise<void> {
+    return this.getAdapter().saveShiftTemplates(templates);
+  }
+
+  async getCurrencies(): Promise<Currency[]> {
+    return this.getAdapter().getCurrencies();
+  }
+
+  async saveCurrencies(currencies: Currency[]): Promise<void> {
+    return this.getAdapter().saveCurrencies(currencies);
+  }
+
+  async getTaxRules(): Promise<TaxRule[]> {
+    return this.getAdapter().getTaxRules();
+  }
+
+  async saveTaxRules(rules: TaxRule[]): Promise<void> {
+    return this.getAdapter().saveTaxRules(rules);
+  }
+
+  async getStatutoryDeductions(): Promise<StatutoryDeduction[]> {
+    return this.getAdapter().getStatutoryDeductions();
+  }
+
+  async saveStatutoryDeductions(deductions: StatutoryDeduction[]): Promise<void> {
+    return this.getAdapter().saveStatutoryDeductions(deductions);
+  }
+
+  async getPayrollCalculations(): Promise<PayrollCalculation[]> {
+    return this.getAdapter().getPayrollCalculations();
+  }
+
+  async savePayrollCalculations(calculations: PayrollCalculation[]): Promise<void> {
+    return this.getAdapter().savePayrollCalculations(calculations);
+  }
+
+  async getLeavePolicies(): Promise<LeavePolicy[]> {
+    return this.getAdapter().getLeavePolicies();
+  }
+
+  async saveLeavePolicies(policies: LeavePolicy[]): Promise<void> {
+    return this.getAdapter().saveLeavePolicies(policies);
+  }
+
+  async getLeaveTypeConfigs(): Promise<any[]> {
+    return this.getAdapter().getLeaveTypeConfigs();
+  }
+
+  async saveLeaveTypeConfigs(configs: any[]): Promise<void> {
+    return this.getAdapter().saveLeaveTypeConfigs(configs);
+  }
+
+  async getRecruitmentAnalytics(): Promise<RecruitmentAnalytics[]> {
+    return this.getAdapter().getRecruitmentAnalytics();
+  }
+
+  async saveRecruitmentAnalytics(analytics: RecruitmentAnalytics[]): Promise<void> {
+    return this.getAdapter().saveRecruitmentAnalytics(analytics);
+  }
+
+  async getHires(): Promise<HireDetails[]> {
+    return this.getAdapter().getHires();
+  }
+
+  async saveHires(hires: HireDetails[]): Promise<void> {
+    return this.getAdapter().saveHires(hires);
+  }
+
+  async getInterviewSchedules(): Promise<InterviewSchedule[]> {
+    return this.getAdapter().getInterviewSchedules();
+  }
+
+  async saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void> {
+    return this.getAdapter().saveInterviewSchedules(schedules);
+  }
+
+  async getOrgChartNodes(): Promise<OrgChartNode[]> {
+    return this.getAdapter().getOrgChartNodes();
+  }
+
+  async saveOrgChartNodes(nodes: OrgChartNode[]): Promise<void> {
+    return this.getAdapter().saveOrgChartNodes(nodes);
+  }
+
+  async getPayslips(): Promise<any[]> {
+    return this.getAdapter().getPayslips();
+  }
+
+  async savePayslips(payslips: any[]): Promise<void> {
+    return this.getAdapter().savePayslips(payslips);
+  }
+
+  async getNotifications(): Promise<any[]> {
+    return this.getAdapter().getNotifications();
+  }
+
+  async saveNotifications(notifications: any[]): Promise<void> {
+    return this.getAdapter().saveNotifications(notifications);
+  }
+
+  async getUsers(): Promise<any[]> {
+    return this.getAdapter().getUsers();
+  }
+
+  async saveUsers(users: any[]): Promise<void> {
+    return this.getAdapter().saveUsers(users);
+  }
+
+  async getStatusHistory(): Promise<EmployeeStatusHistory[]> {
+    return this.getAdapter().getStatusHistory();
+  }
+
+  async saveStatusHistory(history: EmployeeStatusHistory[]): Promise<void> {
+    return this.getAdapter().saveStatusHistory(history);
+  }
+
+  async getSheetLogs(): Promise<SheetLog[]> {
+    return this.getAdapter().getSheetLogs();
   }
 
   // ---- Sync ----

@@ -73,6 +73,7 @@ export interface IDataAdapter {
   getDocuments(): Promise<EmployeeDocument[]>;
   saveDocument(document: EmployeeDocument): Promise<void>;
   getEmployeeDocuments(): Promise<EmployeeDocument[]>;
+  getEmployeeDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]>;
   saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void>;
 
   // JOB DESCRIPTIONS / ONBOARDING
@@ -128,6 +129,98 @@ export interface IDataAdapter {
   // EXIT TEMPLATES
   getExitChecklistTemplates(): Promise<ExitChecklistTemplate[]>;
   getExitInterviewTemplates(): Promise<ExitInterviewTemplate[]>;
+
+  // EXIT PROCESS
+  getExitProcessStages(): Promise<ExitProcessStage[]>;
+  saveExitProcessStages(stages: ExitProcessStage[]): Promise<void>;
+  getSettlementConfig(): Promise<SettlementConfig | null>;
+  saveSettlementConfig(config: SettlementConfig): Promise<void>;
+
+  // PERFORMANCE REVIEW CYCLES
+  getPerformanceReviewCycles(): Promise<PerformanceReviewCycle[]>;
+  savePerformanceReviewCycles(cycles: PerformanceReviewCycle[]): Promise<void>;
+
+  // PERFORMANCE REVIEW TEMPLATES
+  getPerformanceReviewTemplates(): Promise<PerformanceReviewTemplate[]>;
+  savePerformanceReviewTemplates(templates: PerformanceReviewTemplate[]): Promise<void>;
+
+  // TRAINING
+  getTrainingSubmissions(): Promise<TrainingSubmission[]>;
+  saveTrainingSubmissions(submissions: TrainingSubmission[]): Promise<void>;
+  getPeerAssignments(): Promise<PeerAssignment[]>;
+  savePeerAssignments(assignments: PeerAssignment[]): Promise<void>;
+  getTrainingRequests(): Promise<TrainingRequest[]>;
+  saveTrainingRequests(requests: TrainingRequest[]): Promise<void>;
+  getTrainingMentorships(): Promise<TrainingMentorship[]>;
+  saveTrainingMentorships(mentorships: TrainingMentorship[]): Promise<void>;
+  getTrainingCheckIns(): Promise<TrainingCheckIn[]>;
+  saveTrainingCheckIns(checkIns: TrainingCheckIn[]): Promise<void>;
+  getTrainingMessages(): Promise<TrainingMessage[]>;
+  saveTrainingMessages(messages: TrainingMessage[]): Promise<void>;
+
+  // SALARY & COMPENSATION
+  getSalaryComponents(): Promise<SalaryComponent[]>;
+  saveSalaryComponents(components: SalaryComponent[]): Promise<void>;
+  getSalaryStructures(): Promise<SalaryStructure[]>;
+  saveSalaryStructures(structures: SalaryStructure[]): Promise<void>;
+  getPayGrades(): Promise<PayGrade[]>;
+  savePayGrades(payGrades: PayGrade[]): Promise<void>;
+  getSalaryRevisions(): Promise<SalaryRevision[]>;
+  saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void>;
+  getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]>;
+
+  // SHIFTS
+  getShifts(): Promise<Shift[]>;
+  saveShifts(shifts: Shift[]): Promise<void>;
+  getShiftAssignments(): Promise<ShiftAssignment[]>;
+  saveShiftAssignments(assignments: ShiftAssignment[]): Promise<void>;
+  getShiftSwapRequests(): Promise<ShiftSwapRequest[]>;
+  saveShiftSwapRequests(requests: ShiftSwapRequest[]): Promise<void>;
+  getShiftTemplates(): Promise<ShiftTemplate[]>;
+  saveShiftTemplates(templates: ShiftTemplate[]): Promise<void>;
+
+  // PAYROLL CONFIG
+  getCurrencies(): Promise<Currency[]>;
+  saveCurrencies(currencies: Currency[]): Promise<void>;
+  getTaxRules(): Promise<TaxRule[]>;
+  saveTaxRules(rules: TaxRule[]): Promise<void>;
+  getStatutoryDeductions(): Promise<StatutoryDeduction[]>;
+  saveStatutoryDeductions(deductions: StatutoryDeduction[]): Promise<void>;
+  getPayrollCalculations(): Promise<PayrollCalculation[]>;
+  savePayrollCalculations(calculations: PayrollCalculation[]): Promise<void>;
+
+  // LEAVE CONFIG
+  getLeavePolicies(): Promise<LeavePolicy[]>;
+  saveLeavePolicies(policies: LeavePolicy[]): Promise<void>;
+  getLeaveTypeConfigs(): Promise<any[]>;
+  saveLeaveTypeConfigs(configs: any[]): Promise<void>;
+
+  // RECRUITMENT
+  getRecruitmentAnalytics(): Promise<RecruitmentAnalytics[]>;
+  saveRecruitmentAnalytics(analytics: RecruitmentAnalytics[]): Promise<void>;
+  getHires(): Promise<HireDetails[]>;
+  saveHires(hires: HireDetails[]): Promise<void>;
+  getInterviewSchedules(): Promise<InterviewSchedule[]>;
+  saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void>;
+
+  // ORG CHART
+  getOrgChartNodes(): Promise<OrgChartNode[]>;
+  saveOrgChartNodes(nodes: OrgChartNode[]): Promise<void>;
+
+  // PAYSLIPS & NOTIFICATIONS
+  getPayslips(): Promise<any[]>;
+  savePayslips(payslips: any[]): Promise<void>;
+  getNotifications(): Promise<any[]>;
+  saveNotifications(notifications: any[]): Promise<void>;
+
+  // USERS & STATUS
+  getUsers(): Promise<any[]>;
+  saveUsers(users: any[]): Promise<void>;
+  getStatusHistory(): Promise<EmployeeStatusHistory[]>;
+  saveStatusHistory(history: EmployeeStatusHistory[]): Promise<void>;
+
+  // SHEET LOGS
+  getSheetLogs(): Promise<SheetLog[]>;
 
   // SYNC
   syncAll(): Promise<void>;

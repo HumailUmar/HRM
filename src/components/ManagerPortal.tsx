@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, Employee, AttendanceRecord, LeaveRecord, PerformanceReview, User as UserType, Department, Designation } from '../types';
-import { getEmployees, getAttendance, getLeaves, getPerformanceReviews, getDepartments, getDesignations } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 import {
   Users, UserCheck, UserX, Clock, Calendar, CheckCircle, AlertCircle,
@@ -17,11 +17,32 @@ interface ManagerPortalProps {
 }
 
 export default function ManagerPortal({ user, departments, designations, initialSection = 'dashboard' }: ManagerPortalProps) {
+  const data = useData();
   const [activeSection, setActiveSection] = useState<'dashboard' | 'team' | 'attendance' | 'approvals' | 'performance' | 'onboarding'>(initialSection || 'dashboard');
-  const [employees] = useState<Employee[]>(getEmployees());
-  const [attendance] = useState<AttendanceRecord[]>(getAttendance());
-  const [leaves] = useState<LeaveRecord[]>(getLeaves());
-  const [reviews] = useState<PerformanceReview[]>(getPerformanceReviews());
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      const [emps, att, leav, revs] = await Promise.all([
+        data.getEmployees(),
+        data.getAttendance(),
+        data.getLeaves(),
+        data.getPerformanceReviews(),
+      ]);
+      if (mounted) {
+        setEmployees(emps);
+        setAttendance(att);
+        setLeaves(leav);
+        setReviews(revs);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [data]);
 
   if (!user || user.role !== 'Manager') {
     return <div className="p-8 text-center text-slate-500">Access denied. Manager access required.</div>;

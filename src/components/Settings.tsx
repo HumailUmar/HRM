@@ -7,7 +7,8 @@ import {
   RefreshCw, LogOut, Calendar, Server, Cloud, AlertCircle, 
   Check, Loader2, HardDrive, Info, DollarSign 
 } from 'lucide-react';
-import { migrateLocalDataToGSheets, getSettings, saveSettings } from '../lib/storage';
+import { migrateLocalDataToGSheets } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { getGoogleAccessToken } from '../lib/auth';
 import { getSyncTracker, clearSyncTracker, updateSyncTracker } from '../lib/syncTracker';
 import { refreshDataAdapter } from '../services';
@@ -56,6 +57,7 @@ export default function Settings({
   leaves,
   setLeaves
 }: SettingsProps) {
+  const data = useData();
   const [isSandbox, setIsSandbox] = useState(settings.isMockMode);
   const [storageType, setStorageType] = useState<any>(settings.storageType || 'local');
   const [biometricUrl, setBiometricUrl] = useState(settings.biometric.apiUrl);
@@ -190,7 +192,7 @@ export default function Settings({
       }
     };
     
-    saveSettings(updated);
+    await data.saveSettings(updated);
     setSettings(updated);
     refreshDataAdapter();
 
@@ -236,7 +238,7 @@ export default function Settings({
       }
     };
 
-    saveSettings(updated);
+    await data.saveSettings(updated);
     setSettings(updated);
     refreshDataAdapter();
     alert("System configurations and Google Sheets endpoints saved successfully!");
@@ -369,13 +371,15 @@ export default function Settings({
       {/* 1. Storage Engine Tab */}
       {activeSubTab === 'storage' && (
         <div className="space-y-6">
-          <StorageSettings onSettingsChange={() => {
-            setSettings(getSettings());
+          <StorageSettings onSettingsChange={async () => {
+            const latest = await data.getSettings();
+            setSettings(latest);
           }} />
           
           <div id="database-test-section" className="mt-6 pt-6 border-t border-slate-200">
-            <DatabaseTest onSettingsChange={() => {
-              setSettings(getSettings());
+            <DatabaseTest onSettingsChange={async () => {
+              const latest = await data.getSettings();
+              setSettings(latest);
             }} />
           </div>
         </div>
@@ -391,7 +395,10 @@ export default function Settings({
       {/* 3. AI Tab */}
       {activeSubTab === 'ai' && (
         <div className="space-y-6">
-          <AIConfiguration settings={settings} onSettingsChange={() => setSettings(getSettings())} />
+          <AIConfiguration settings={settings} onSettingsChange={async () => {
+            const latest = await data.getSettings();
+            setSettings(latest);
+          }} />
         </div>
       )}
 
@@ -843,10 +850,9 @@ export default function Settings({
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
           <GoogleSheetsSetupWizard
             accessToken={getGoogleAccessToken() || ''}
-            onComplete={() => {
+            onComplete={async () => {
               setShowSetupWizard(false);
-              const latestSettings = getSettings();
-              // Update local form state too so it's in sync
+              const latestSettings = await data.getSettings();
               setSheetId(latestSettings.googleSheets.spreadsheetId || "");
               setSettings(latestSettings);
               refreshDataAdapter();

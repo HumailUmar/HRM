@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { getJDMatches, getJobDescriptions, getCandidates, saveJDMatches, saveCandidates } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { JDResumeMatch, JobDescription, Candidate } from '../types';
 import { FileText, Search, Filter, CheckCircle2, XCircle, AlertCircle, TrendingUp, BarChart2, Star, UserPlus, FileSearch, ArrowRight, Activity, ChevronRight, X, Play, Target } from 'lucide-react';
 import { calculateMatch } from '../utils/matchingAlgorithm';
 
 export default function JDMatching() {
+  const data = useData();
   const [jds, setJds] = useState<JobDescription[]>([]);
   const [matches, setMatches] = useState<JDResumeMatch[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -15,14 +16,25 @@ export default function JDMatching() {
   const [filterLevel, setFilterLevel] = useState<string>('All');
   
   useEffect(() => {
-    const loadedJds = getJobDescriptions();
-    setJds(loadedJds);
-    if (loadedJds.length > 0) {
-      setSelectedJdId(loadedJds[0].id);
+    let mounted = true;
+    async function load() {
+      const [jobDescs, jdMatches, cands] = await Promise.all([
+        data.getJobDescriptions(),
+        data.getJDMatches(),
+        data.getCandidates(),
+      ]);
+      if (mounted) {
+        setJds(jobDescs);
+        setMatches(jdMatches);
+        setCandidates(cands);
+        if (jobDescs.length > 0) {
+          setSelectedJdId(jobDescs[0].id);
+        }
+      }
     }
-    setMatches(getJDMatches());
-    setCandidates(getCandidates());
-  }, []);
+    load();
+    return () => { mounted = false; };
+  }, [data]);
 
   const handleRunMatching = () => {
     if (!selectedJdId) return;
@@ -42,19 +54,19 @@ export default function JDMatching() {
     });
     
     setMatches(updatedMatches);
-    saveJDMatches(updatedMatches);
+    await data.saveJDMatches(updatedMatches);
     
     // Auto-shortlist logic
     if (jd.matchingConfig?.autoShortlist) {
       const updatedCandidates = candidates.map(c => {
-        const match = updatedMatches.find(m => m.candidateId === c.id && m.jobId === jd.id);
+        const match = updatedMatches.find(m => m.candidateId === c.id && m.jdId === jd.id);
         if (match && match.overallScore >= (jd.matchingConfig?.strongMatchThreshold || 80)) {
           return { ...c, status: 'Shortlisted' } as Candidate;
         }
         return c;
       });
       setCandidates(updatedCandidates);
-      saveCandidates(updatedCandidates);
+      await data.saveCandidates(updatedCandidates);
     }
   };
 

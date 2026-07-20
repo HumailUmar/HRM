@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, BarChart3, Plus, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { User, PerformanceReviewCycle, PerformanceGoal, Department, Designation } from '../types';
-import { getPerformanceReviewCycles, savePerformanceReviewCycles, getEmployees, getPerformanceReviews, getDepartments, getDesignations } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import ReviewCycleModal from './ReviewCycleModal';
 import ReviewTemplates from './ReviewTemplates';
 import SelfReview from './SelfReview';
@@ -19,13 +19,31 @@ interface PerformanceProps {
 }
 
 export default function Performance({ user, departments, designations }: PerformanceProps) {
+  const data = useData();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'cycles' | 'reviews' | 'goals' | 'feedback' | 'analytics' | 'templates' | 'my-reviews' | 'team-reviews' | 'peer-reviews'>('dashboard');
-  const [cycles, setCycles] = useState<PerformanceReviewCycle[]>(getPerformanceReviewCycles());
+  const [cycles, setCycles] = useState<PerformanceReviewCycle[]>([]);
+  const [employees, setEmployees] = useState<User[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<PerformanceReviewCycle | undefined>(undefined);
 
-  const employees = getEmployees();
-  const allReviews = getPerformanceReviews();
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      const [cyc, emps, revs] = await Promise.all([
+        data.getPerformanceReviewCycles(),
+        data.getEmployees(),
+        data.getPerformanceReviews(),
+      ]);
+      if (mounted) {
+        setCycles(cyc);
+        setEmployees(emps as any);
+        setReviews(revs as any);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [data]);
 
   const getFilteredData = () => {
     let filteredReviews = allReviews;
@@ -81,7 +99,7 @@ export default function Performance({ user, departments, designations }: Perform
       newCycles = [...cycles, cycle];
     }
     setCycles(newCycles);
-    savePerformanceReviewCycles(newCycles);
+    await data.savePerformanceReviewCycles(newCycles);
     setIsModalOpen(false);
     setEditingCycle(undefined);
   };

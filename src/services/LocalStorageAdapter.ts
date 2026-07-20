@@ -37,7 +37,12 @@ import {
   getExitRecords,
   getExitChecklistTemplates,
   getExitInterviewTemplates,
+  getExitProcessStages,
+  saveExitProcessStages,
+  getSettlementConfig,
+  saveSettlementConfig,
   getOnboardingTasks,
+  saveOnboardingTasks,
   getOnboardingTemplates,
   getJobDescriptions,
   saveJobDescriptions,
@@ -49,6 +54,66 @@ import {
   saveScorecards,
   getJDMatches,
   saveJDMatches,
+  getPerformanceReviewCycles,
+  savePerformanceReviewCycles,
+  getPerformanceReviewTemplates,
+  savePerformanceReviewTemplates,
+  getTrainingSubmissions,
+  saveTrainingSubmissions,
+  getPeerAssignments,
+  savePeerAssignments,
+  getTrainingRequests,
+  saveTrainingRequests,
+  getTrainingMentorships,
+  saveTrainingMentorships,
+  getTrainingCheckIns,
+  saveTrainingCheckIns,
+  getTrainingMessages,
+  saveTrainingMessages,
+  getSalaryComponents,
+  saveSalaryComponents,
+  getSalaryStructures,
+  saveSalaryStructures,
+  getPayGrades,
+  savePayGrades,
+  getSalaryRevisions,
+  saveSalaryRevisions,
+  getShifts,
+  saveShifts,
+  getShiftAssignments,
+  saveShiftAssignments,
+  getShiftSwapRequests,
+  saveShiftSwapRequests,
+  getShiftTemplates,
+  saveShiftTemplates,
+  getCurrencies,
+  saveCurrencies,
+  getTaxRules,
+  saveTaxRules,
+  getStatutoryDeductions,
+  saveStatutoryDeductions,
+  getPayrollCalculations,
+  savePayrollCalculations,
+  getLeavePolicies,
+  saveLeavePolicies,
+  getLeaveTypeConfigs,
+  getRecruitmentAnalytics,
+  saveRecruitmentAnalytics,
+  getHires,
+  saveHires,
+  getInterviewSchedules,
+  saveInterviewSchedules,
+  getOrgChartNodes,
+  saveOrgChartNodes,
+  getPayslips,
+  savePayslips,
+  getNotifications,
+  saveNotifications,
+  getUsers,
+  saveUsers,
+  getStatusHistory,
+  saveStatusHistory,
+  getSheetLogs,
 } from '../lib/storage';
 import { DEFAULT_SETTINGS } from '../lib/mockData';
 import {
@@ -77,6 +142,35 @@ import {
   LegacyOnboardingTask,
   OnboardingTemplate,
   JobDescription,
+  ExitProcessStage,
+  SettlementConfig,
+  PerformanceReviewCycle,
+  PerformanceReviewTemplate,
+  TrainingSubmission,
+  PeerAssignment,
+  TrainingRequest,
+  TrainingMentorship,
+  TrainingCheckIn,
+  TrainingMessage,
+  SalaryComponent,
+  SalaryStructure,
+  PayGrade,
+  SalaryRevision,
+  Shift,
+  ShiftAssignment,
+  ShiftSwapRequest,
+  ShiftTemplate,
+  Currency,
+  TaxRule,
+  StatutoryDeduction,
+  PayrollCalculation,
+  LeavePolicy,
+  RecruitmentAnalytics,
+  HireDetails,
+  InterviewSchedule,
+  OrgChartNode,
+  SheetLog,
+  EmployeeStatusHistory,
 } from '../types';
 
 export class LocalStorageAdapter implements IDataAdapter {
@@ -251,6 +345,11 @@ export class LocalStorageAdapter implements IDataAdapter {
     return getEmployeeDocuments();
   }
 
+  async getEmployeeDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]> {
+    const docs = getEmployeeDocuments();
+    return docs.filter(d => d.employeeId === employeeId);
+  }
+
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
     saveEmployeeDocuments(docs);
   }
@@ -402,6 +501,271 @@ export class LocalStorageAdapter implements IDataAdapter {
 
   async getExitInterviewTemplates(): Promise<ExitInterviewTemplate[]> {
     return getExitInterviewTemplates();
+  }
+
+  async getExitProcessStages(): Promise<ExitProcessStage[]> {
+    return getExitProcessStages();
+  }
+
+  async saveExitProcessStages(stages: ExitProcessStage[]): Promise<void> {
+    saveExitProcessStages(stages);
+  }
+
+  async getSettlementConfig(): Promise<SettlementConfig | null> {
+    return getSettlementConfig();
+  }
+
+  async saveSettlementConfig(config: SettlementConfig): Promise<void> {
+    saveSettlementConfig(config);
+  }
+
+  async getPerformanceReviewCycles(): Promise<PerformanceReviewCycle[]> {
+    return getPerformanceReviewCycles();
+  }
+
+  async savePerformanceReviewCycles(cycles: PerformanceReviewCycle[]): Promise<void> {
+    savePerformanceReviewCycles(cycles);
+  }
+
+  async getPerformanceReviewTemplates(): Promise<PerformanceReviewTemplate[]> {
+    return getPerformanceReviewTemplates();
+  }
+
+  async savePerformanceReviewTemplates(templates: PerformanceReviewTemplate[]): Promise<void> {
+    savePerformanceReviewTemplates(templates);
+  }
+
+  async getTrainingSubmissions(): Promise<TrainingSubmission[]> {
+    return getTrainingSubmissions();
+  }
+
+  async saveTrainingSubmissions(submissions: TrainingSubmission[]): Promise<void> {
+    saveTrainingSubmissions(submissions);
+  }
+
+  async getPeerAssignments(): Promise<PeerAssignment[]> {
+    return getPeerAssignments();
+  }
+
+  async savePeerAssignments(assignments: PeerAssignment[]): Promise<void> {
+    savePeerAssignments(assignments);
+  }
+
+  async getTrainingRequests(): Promise<TrainingRequest[]> {
+    return getTrainingRequests();
+  }
+
+  async saveTrainingRequests(requests: TrainingRequest[]): Promise<void> {
+    saveTrainingRequests(requests);
+  }
+
+  async getTrainingMentorships(): Promise<TrainingMentorship[]> {
+    return getTrainingMentorships();
+  }
+
+  async saveTrainingMentorships(mentorships: TrainingMentorship[]): Promise<void> {
+    saveTrainingMentorships(mentorships);
+  }
+
+  async getTrainingCheckIns(): Promise<TrainingCheckIn[]> {
+    return getTrainingCheckIns();
+  }
+
+  async saveTrainingCheckIns(checkIns: TrainingCheckIn[]): Promise<void> {
+    saveTrainingCheckIns(checkIns);
+  }
+
+  async getTrainingMessages(): Promise<TrainingMessage[]> {
+    return getTrainingMessages();
+  }
+
+  async saveTrainingMessages(messages: TrainingMessage[]): Promise<void> {
+    saveTrainingMessages(messages);
+  }
+
+  async getSalaryComponents(): Promise<SalaryComponent[]> {
+    return getSalaryComponents();
+  }
+
+  async saveSalaryComponents(components: SalaryComponent[]): Promise<void> {
+    saveSalaryComponents(components);
+  }
+
+  async getSalaryStructures(): Promise<SalaryStructure[]> {
+    return getSalaryStructures();
+  }
+
+  async saveSalaryStructures(structures: SalaryStructure[]): Promise<void> {
+    saveSalaryStructures(structures);
+  }
+
+  async getPayGrades(): Promise<PayGrade[]> {
+    return getPayGrades();
+  }
+
+  async savePayGrades(payGrades: PayGrade[]): Promise<void> {
+    savePayGrades(payGrades);
+  }
+
+  async getSalaryRevisions(): Promise<SalaryRevision[]> {
+    return getSalaryRevisions();
+  }
+
+  async saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void> {
+    saveSalaryRevisions(revisions);
+  }
+
+  async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
+    const revisions = getSalaryRevisions();
+    return revisions.filter(r => r.employeeId === employeeId);
+  }
+
+  async getShifts(): Promise<Shift[]> {
+    return getShifts();
+  }
+
+  async saveShifts(shifts: Shift[]): Promise<void> {
+    saveShifts(shifts);
+  }
+
+  async getShiftAssignments(): Promise<ShiftAssignment[]> {
+    return getShiftAssignments();
+  }
+
+  async saveShiftAssignments(assignments: ShiftAssignment[]): Promise<void> {
+    saveShiftAssignments(assignments);
+  }
+
+  async getShiftSwapRequests(): Promise<ShiftSwapRequest[]> {
+    return getShiftSwapRequests();
+  }
+
+  async saveShiftSwapRequests(requests: ShiftSwapRequest[]): Promise<void> {
+    saveShiftSwapRequests(requests);
+  }
+
+  async getShiftTemplates(): Promise<ShiftTemplate[]> {
+    return getShiftTemplates();
+  }
+
+  async saveShiftTemplates(templates: ShiftTemplate[]): Promise<void> {
+    saveShiftTemplates(templates);
+  }
+
+  async getCurrencies(): Promise<Currency[]> {
+    return getCurrencies();
+  }
+
+  async saveCurrencies(currencies: Currency[]): Promise<void> {
+    saveCurrencies(currencies);
+  }
+
+  async getTaxRules(): Promise<TaxRule[]> {
+    return getTaxRules();
+  }
+
+  async saveTaxRules(rules: TaxRule[]): Promise<void> {
+    saveTaxRules(rules);
+  }
+
+  async getStatutoryDeductions(): Promise<StatutoryDeduction[]> {
+    return getStatutoryDeductions();
+  }
+
+  async saveStatutoryDeductions(deductions: StatutoryDeduction[]): Promise<void> {
+    saveStatutoryDeductions(deductions);
+  }
+
+  async getPayrollCalculations(): Promise<PayrollCalculation[]> {
+    return getPayrollCalculations();
+  }
+
+  async savePayrollCalculations(calculations: PayrollCalculation[]): Promise<void> {
+    savePayrollCalculations(calculations);
+  }
+
+  async getLeavePolicies(): Promise<LeavePolicy[]> {
+    return getLeavePolicies();
+  }
+
+  async saveLeavePolicies(policies: LeavePolicy[]): Promise<void> {
+    saveLeavePolicies(policies);
+  }
+
+  async getLeaveTypeConfigs(): Promise<any[]> {
+    return getLeaveTypeConfigs();
+  }
+
+  async saveLeaveTypeConfigs(configs: any[]): Promise<void> {
+    saveLeaveTypeConfigs(configs);
+  }
+
+  async getRecruitmentAnalytics(): Promise<RecruitmentAnalytics[]> {
+    return getRecruitmentAnalytics();
+  }
+
+  async saveRecruitmentAnalytics(analytics: RecruitmentAnalytics[]): Promise<void> {
+    saveRecruitmentAnalytics(analytics);
+  }
+
+  async getHires(): Promise<HireDetails[]> {
+    return getHires();
+  }
+
+  async saveHires(hires: HireDetails[]): Promise<void> {
+    saveHires(hires);
+  }
+
+  async getInterviewSchedules(): Promise<InterviewSchedule[]> {
+    return getInterviewSchedules();
+  }
+
+  async saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void> {
+    saveInterviewSchedules(schedules);
+  }
+
+  async getOrgChartNodes(): Promise<OrgChartNode[]> {
+    return getOrgChartNodes();
+  }
+
+  async saveOrgChartNodes(nodes: OrgChartNode[]): Promise<void> {
+    saveOrgChartNodes(nodes);
+  }
+
+  async getPayslips(): Promise<any[]> {
+    return getPayslips();
+  }
+
+  async savePayslips(payslips: any[]): Promise<void> {
+    savePayslips(payslips);
+  }
+
+  async getNotifications(): Promise<any[]> {
+    return getNotifications();
+  }
+
+  async saveNotifications(notifications: any[]): Promise<void> {
+    saveNotifications(notifications);
+  }
+
+  async getUsers(): Promise<any[]> {
+    return getUsers();
+  }
+
+  async saveUsers(users: any[]): Promise<void> {
+    saveUsers(users);
+  }
+
+  async getStatusHistory(): Promise<EmployeeStatusHistory[]> {
+    return getStatusHistory();
+  }
+
+  async saveStatusHistory(history: EmployeeStatusHistory[]): Promise<void> {
+    saveStatusHistory(history);
+  }
+
+  async getSheetLogs(): Promise<SheetLog[]> {
+    return getSheetLogs();
   }
 
   // SYNC

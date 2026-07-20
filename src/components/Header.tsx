@@ -66,14 +66,16 @@ export default function Header({ user, onSignOut, onSignIn, isMockMode, onSync }
         </div>
 
         {/* Sync Button */}
-        <button 
-          onClick={onSync}
-          className="w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/60 flex items-center justify-center transition-all duration-200 text-slate-600 hover:scale-105"
-          aria-label="Sync Data"
-          title="Sync Data"
-        >
-          <RefreshCw className="w-[18px] h-[18px]" />
-        </button>
+        {!isMockMode && (
+          <button 
+            onClick={onSync}
+            className="w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/60 flex items-center justify-center transition-all duration-200 text-slate-600 hover:scale-105"
+            aria-label="Sync Data"
+            title="Sync Data"
+          >
+            <RefreshCw className="w-[18px] h-[18px]" />
+          </button>
+        )}
 
         {/* Notification Bell */}
         <div className="relative" ref={dropdownRef}>

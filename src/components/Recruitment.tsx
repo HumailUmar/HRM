@@ -1,7 +1,6 @@
 import { useData } from '../contexts/DataContext';
 import { logger } from '../lib/logger';
 import { getAuthHeaders } from '../lib/auth';
-import { getOnboardingTasks, saveOnboardingTasks } from '../lib/storage';
 import { useState, useMemo, useEffect, DragEvent, ChangeEvent, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import JobDescriptions from './JobDescriptions';
@@ -726,8 +725,8 @@ export default function Recruitment({
 
     // Persist the new employee and onboarding tasks.
     void persistEmployees([newEmployee, ...employees]);
-    const existingTasks = getOnboardingTasks();
-    saveOnboardingTasks([...legacyOnboardingTasks, ...existingTasks]);
+    const existingTasks = await data.getOnboardingTasks();
+    await data.saveOnboardingTasks([...legacyOnboardingTasks, ...existingTasks]);
 
     if (!settings.isMockMode) {
       try {

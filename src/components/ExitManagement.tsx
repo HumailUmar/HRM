@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Employee, ExitRecord, LeaveRecord, LeavePolicy, Department, Designation 
 } from '../types';
-import { 
-  getEmployees, saveEmployees, getExitRecords, saveExitRecords, 
-  getLeaves, getLeavePolicies 
-} from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { 
   User, Calendar, CheckCircle, XCircle, AlertCircle, 
   FileText, Download, Plus, Search, Filter, Trash2,
@@ -19,10 +16,31 @@ interface ExitManagementProps {
 }
 
 export default function ExitManagement({ user, employees, setEmployees }: ExitManagementProps) {
+  const data = useData();
   const [exitRecords, setExitRecords] = useState<ExitRecord[]>([]);
+  const [allLeaves, setAllLeaves] = useState<LeaveRecord[]>([]);
+  const [policies, setPolicies] = useState<LeavePolicy[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'active' | 'initiated' | 'completed'>('active');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      const [leaves, exitRecs, leavePolicies] = await Promise.all([
+        data.getLeaves(),
+        data.getExitRecords(),
+        data.getLeavePolicies(),
+      ]);
+      if (mounted) {
+        setAllLeaves(leaves);
+        setExitRecords(exitRecs);
+        setPolicies(leavePolicies);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [data]);
 
   // ============================================================
   //  REAL LEAVE BALANCE CALCULATION
@@ -34,11 +52,9 @@ export default function ExitManagement({ user, employees, setEmployees }: ExitMa
     pending: number;
   } => {
     // 1. Get all leave records for this employee
-    const allLeaves = getLeaves();
     const employeeLeaves = allLeaves.filter(l => l.employeeId === employeeId);
 
     // 2. Get the leave policy (default to annual leave quota)
-    const policies = getLeavePolicies();
     const defaultPolicy = policies.find(p => p.isDefault) || policies[0];
     const annualQuota = defaultPolicy?.quota || 20; // Default 20 days if no policy
 
@@ -138,19 +154,19 @@ export default function ExitManagement({ user, employees, setEmployees }: ExitMa
 
     const updated = [...exitRecords, newExitRecord];
     setExitRecords(updated);
-    saveExitRecords(updated);
+    await data.saveExitRecords(updated);
     alert(`Exit process initiated for ${emp.name}`);
   };
 
   // ============================================================
   //  UPDATE EXIT STATUS
   // ============================================================
-  const handleUpdateExit = (id: string, status: ExitRecord['status']) => {
+  const handleUpdateExit = async (id: string, status: ExitRecord['status']) => {
     const updated = exitRecords.map(r => 
       r.id === id ? { ...r, status, updatedAt: new Date().toISOString() } : r
     );
     setExitRecords(updated);
-    saveExitRecords(updated);
+    await data.saveExitRecords(updated);
 
     // If completed, update employee status to 'Terminated'
     if (status === 'Completed') {
@@ -160,12 +176,12 @@ export default function ExitManagement({ user, employees, setEmployees }: ExitMa
           e.id === record.employeeId ? { ...e, status: 'Terminated' as any } : e
         );
         setEmployees(updatedEmployees);
-        saveEmployees(updatedEmployees);
+        await data.saveEmployees(updatedEmployees);
       }
     }
   };
 
-  const handleUpdateChecklist = (recordId: string, itemId: string, status: 'Pending' | 'In Progress' | 'Completed') => {
+  const handleUpdateChecklist = async (recordId: string, itemId: string, status: 'Pending' | 'In Progress' | 'Completed') => {
     const updated = exitRecords.map(r => {
       if (r.id !== recordId) return r;
       return {
@@ -177,7 +193,7 @@ export default function ExitManagement({ user, employees, setEmployees }: ExitMa
       };
     });
     setExitRecords(updated);
-    saveExitRecords(updated);
+    await data.saveExitRecords(updated);
   };
 
   return (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { EmployeeDocument, Employee, Department, Designation } from '../types';
-import { getEmployeeDocuments, saveEmployeeDocuments, getEmployees } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { getGoogleAccessToken, getAuthHeaders } from '../lib/auth';
 import { 
   Upload, File, Trash2, Download, Eye, CheckCircle, XCircle, 
@@ -35,6 +35,7 @@ const DOCUMENT_TYPES = [
 ];
 
 export default function Documents({ documents, setDocuments, employees, designations }: DocumentsProps) {
+  const data = useData();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
@@ -112,7 +113,7 @@ export default function Documents({ documents, setDocuments, employees, designat
       // Save to local storage
       const updated = [...documents, newDoc];
       setDocuments(updated);
-      saveEmployeeDocuments(updated);
+      await data.saveEmployeeDocuments(updated);
       alert('Document uploaded successfully!');
 
     } catch (error: any) {
@@ -122,20 +123,20 @@ export default function Documents({ documents, setDocuments, employees, designat
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Delete this document?')) {
       const updated = documents.filter(d => d.id !== id);
       setDocuments(updated);
-      saveEmployeeDocuments(updated);
+      await data.saveEmployeeDocuments(updated);
     }
   };
 
-  const handleVerify = (id: string) => {
+  const handleVerify = async (id: string) => {
     const updated = documents.map(d => 
       d.id === id ? { ...d, isVerified: true, status: 'Verified' as const } : d
     );
     setDocuments(updated);
-    saveEmployeeDocuments(updated);
+    await data.saveEmployeeDocuments(updated);
   };
 
   const filteredDocs = documents.filter(doc => {

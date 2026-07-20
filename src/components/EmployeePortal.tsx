@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, Employee, AttendanceRecord, LeaveRecord, Payslip, PerformanceReview, EmployeeDocument, Department, Designation } from '../types';
-import { getAttendance, getLeaves, getEmployeeDocuments, getPerformanceReviews } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 import {
   User as UserIcon, Users, Clock, Calendar, CheckCircle, AlertCircle,
@@ -17,11 +17,32 @@ interface EmployeePortalProps {
 }
 
 export default function EmployeePortal({ user, employee, departments, designations, initialSection = 'dashboard' }: EmployeePortalProps) {
+  const data = useData();
   const [activeSection, setActiveSection] = useState<'dashboard' | 'profile' | 'attendance' | 'leave' | 'payslips' | 'onboarding' | 'performance'>(initialSection || 'dashboard');
-  const [attendance] = useState<AttendanceRecord[]>(getAttendance());
-  const [leaves] = useState<LeaveRecord[]>(getLeaves());
-  const [documents] = useState<EmployeeDocument[]>(getEmployeeDocuments());
-  const [reviews] = useState<PerformanceReview[]>(getPerformanceReviews());
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
+  const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      const [att, leav, docs, revs] = await Promise.all([
+        data.getAttendance(),
+        data.getLeaves(),
+        data.getEmployeeDocumentsByEmployee(employee?.id || ''),
+        data.getPerformanceReviews(),
+      ]);
+      if (mounted) {
+        setAttendance(att);
+        setLeaves(leav);
+        setDocuments(docs);
+        setReviews(revs);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [data, employee?.id]);
 
   if (!employee) {
     return <div className="p-8 text-center text-slate-500">Employee data not found.</div>;
