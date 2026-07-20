@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { getTrainingAssignments, getEmployees, getTrainingModules } from '../lib/storage';
+import React, { useState, useEffect } from 'react';
 import { TrainingAssignment, Employee, TrainingModule, User, Department, Designation } from '../types';
 import { getEmployeeDepartment } from '../lib/employeeUtils';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
 import { ChartWrapper } from './ChartWrapper';
 import { Award, BookOpen, Clock, AlertTriangle, Users, TrendingUp } from 'lucide-react';
+
+import { useData } from '../contexts/DataContext';
 
 interface TrainingAnalyticsProps {
   user: User | null;
@@ -13,9 +14,22 @@ interface TrainingAnalyticsProps {
 }
 
 export default function TrainingAnalytics({ user, departments, designations }: TrainingAnalyticsProps) {
-  const [assignments] = useState<TrainingAssignment[]>(getTrainingAssignments());
-  const [employees] = useState<Employee[]>(getEmployees());
-  const [modules] = useState<TrainingModule[]>(getTrainingModules());
+  const data = useData();
+  const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [modules, setModules] = useState<TrainingModule[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getTrainingAssignments(), data.getEmployees(), data.getTrainingModules()]).then(([a, e, m]) => {
+      if (!cancelled) {
+        setAssignments(a);
+        setEmployees(e);
+        setModules(m);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   // Metrics calculation
   const totalCourses = modules.length;

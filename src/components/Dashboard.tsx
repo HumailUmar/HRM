@@ -1,7 +1,7 @@
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { useState, useMemo, useEffect } from 'react';
 import { Employee, EmployeeDocument, JobDescription, AttendanceRecord, Candidate, PayrollRecord, AppSettings, LeaveRecord, Department, Designation } from '../types';
-import { getSheetLogs, addSheetLog } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 import { getInitials } from '../utils/safeText';
 import { Activity, ArrowRight, Users, UserCheck, Hourglass, Sparkles, Terminal, MapPin, Calendar, Clock, Check, X, ChevronRight, PieChart, Star, ClipboardList, Layers, Award, Briefcase, DollarSign, FileText, ShieldCheck } from 'lucide-react';
@@ -67,8 +67,16 @@ export default function Dashboard({
   jobDescriptions = [],
   user
 }: DashboardProps) {
+  const data = useData();
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'heatmap' | 'pie' | 'structures'>('heatmap');
+  const [logs, setLogs] = useState<{ rowData: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    data.getSheetLogs().then(l => { if (!cancelled) setLogs(l.slice(0, 5)); });
+    return () => { cancelled = true; };
+  }, [data]);
 
   // Today state
   const todayStr = new Date().toISOString().split('T')[0];
@@ -199,11 +207,6 @@ export default function Dashboard({
     if (selectedSeat === null) return null;
     return seatGrid.find(s => s.seatNumber === selectedSeat) || null;
   }, [selectedSeat, seatGrid]);
-
-  // Live Sheet Logs
-  const logs = useMemo(() => {
-    return getSheetLogs().slice(0, 5);
-  }, [employees, attendance, candidates, payrolls]);
 
   // Handle Leave approval
   const handleApproveLeave = async (id: string, empName: string, type: string) => {

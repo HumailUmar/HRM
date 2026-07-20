@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { getTrainingModules, saveTrainingModules, getEmployees, getTrainingAssignments, saveTrainingAssignments, getDepartments, getDesignations } from '../lib/storage';
+import React, { useState, useEffect } from 'react';
 import { Employee, TrainingModule, TrainingAssignment, User, TrainingContentType, Department, Designation } from '../types';
+import { useData } from '../contexts/DataContext';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 import { Plus, Video, Link as LinkIcon, FileText, CheckSquare, Upload, Award, FileCode, UserPlus, GraduationCap, ClipboardList, TrendingUp, Users, HelpCircle, CheckCircle2 } from 'lucide-react';
 import TrainingRequests from './TrainingRequests';
@@ -16,12 +16,24 @@ interface TrainingProps {
 }
 
 export default function Training({ user, defaultTab, departments, designations }: TrainingProps) {
-  const [modules, setModules] = useState<TrainingModule[]>(getTrainingModules());
-  const [employees] = useState<Employee[]>(getEmployees());
+  const data = useData();
+  const [modules, setModules] = useState<TrainingModule[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeTab, setActiveTab] = useState<'employee' | 'hr-modules' | 'requests' | 'mentor' | 'analytics'>(defaultTab || 'employee');
   const [showCreate, setShowCreate] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getTrainingModules(), data.getEmployees()]).then(([mods, emps]) => {
+      if (!cancelled) {
+        setModules(mods);
+        setEmployees(emps);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
+
+  useEffect(() => {
     if (defaultTab) {
       setActiveTab(defaultTab);
     }
@@ -44,7 +56,7 @@ export default function Training({ user, defaultTab, departments, designations }
   const isHR = user?.role === 'HR' || user?.role === 'Admin';
   const currentEmpName = employees.find(e => e.email === user?.email)?.name || user?.email || 'HR Specialist';
 
-  const handleAddModule = (e: React.FormEvent) => {
+  const handleAddModule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle) return;
 
@@ -65,7 +77,7 @@ export default function Training({ user, defaultTab, departments, designations }
 
     const updatedModules = [...modules, module];
     setModules(updatedModules);
-    saveTrainingModules(updatedModules);
+    await data.saveTrainingModules(updatedModules);
 
     // Reset Form
     setNewTitle('');
@@ -80,7 +92,7 @@ export default function Training({ user, defaultTab, departments, designations }
     alert('Training course created successfully!');
   };
 
-  const handleAssignModule = (moduleId: string) => {
+  const handleAssignModule = async (moduleId: string) => {
     const empId = assignTargetEmp[moduleId];
     const mentorId = assignTargetMentor[moduleId];
 
@@ -95,7 +107,7 @@ export default function Training({ user, defaultTab, departments, designations }
 
     if (!employeeObj || !modObj) return;
 
-    const existingAssignments = getTrainingAssignments();
+    const existingAssignments = await data.getTrainingAssignments();
     
     // Check if already assigned
     const alreadyAssigned = existingAssignments.some(a => a.courseId === moduleId && a.employeeId === empId);
@@ -118,7 +130,7 @@ export default function Training({ user, defaultTab, departments, designations }
       notes: 'Assigned directly by HR',
     };
 
-    saveTrainingAssignments([...existingAssignments, newAssignment]);
+    await data.saveTrainingAssignments([...existingAssignments, newAssignment]);
     alert(`Course assigned successfully to ${employeeObj.name}!`);
 
     // Reset selectors

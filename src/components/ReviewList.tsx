@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Employee, PerformanceReview, User } from '../types';
-import { getPerformanceReviews, getEmployees } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { 
   FileText, Search, Filter, Eye, Download, 
   CheckCircle, Clock, AlertCircle, X, ChevronDown, ChevronUp
@@ -14,8 +14,9 @@ type SortField = 'employeeName' | 'reviewerName' | 'reviewerType' | 'status' | '
 type SortDirection = 'asc' | 'desc';
 
 export default function ReviewList({ user }: ReviewListProps) {
-  const [employees] = useState<Employee[]>(getEmployees());
-  const [reviews] = useState<PerformanceReview[]>(getPerformanceReviews());
+  const data = useData();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -23,6 +24,17 @@ export default function ReviewList({ user }: ReviewListProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedReview, setSelectedReview] = useState<PerformanceReview | null>(null);
   const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getEmployees(), data.getPerformanceReviews()]).then(([emps, revs]) => {
+      if (!cancelled) {
+        setEmployees(emps);
+        setReviews(revs);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   // Filter reviews based on role and filters
   const filteredReviews = useMemo(() => {

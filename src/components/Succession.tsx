@@ -4,10 +4,7 @@ import { motion } from 'motion/react';
 import { Employee, SuccessionPlan, AppSettings, OrgChartNode, Department, Designation } from '../types';
 import { getEmployeeDesignation } from '../lib/employeeUtils';
 import { GitMerge, Users, Plus, Trash2, Search, Sliders, Shield, AlertCircle, TrendingUp, CheckCircle, Award, X } from 'lucide-react';
-import { 
-  addSheetLog, getSuccessionPlans, saveSuccessionPlans, 
-  getOrgChartNodes, saveOrgChartNodes 
-} from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { INITIAL_ORG_CHART } from '../lib/mockData';
 import OrgChart from './OrgChart';
 
@@ -20,21 +17,20 @@ interface SuccessionProps {
 }
 
 export default function Succession({ employees, isMockMode, settings, departments, designations }: SuccessionProps) {
+  const data = useData();
   const [viewMode, setViewMode] = useState<'chart' | 'grid'>('chart');
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
   
-  // State for succession plans & org chart nodes
   const [plans, setPlans] = useState<SuccessionPlan[]>([]);
   const [orgNodes, setOrgNodes] = useState<OrgChartNode[]>([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // Load all Succession & Org Chart data
   useEffect(() => {
     const loadData = async () => {
       try {
         if (isMockMode) {
-          const loadedPlans = getSuccessionPlans();
+          const loadedPlans = await data.getSuccessionPlans();
           setPlans(loadedPlans.length > 0 ? loadedPlans : [
             {
               id: 'SUC-001',
@@ -62,14 +58,8 @@ export default function Succession({ employees, isMockMode, settings, department
             }
           ]);
           
-          const loadedNodes = getOrgChartNodes();
-          setOrgNodes(loadedNodes.length > 0 ? loadedNodes : INITIAL_ORG_CHART);
-        } else {
-          const { fetchSuccessionPlansFromGSheet, fetchOrgChartFromGSheet } = await import('../lib/storage');
-          const loadedPlans = await fetchSuccessionPlansFromGSheet();
-          setPlans(loadedPlans);
-          const loadedNodes = await fetchOrgChartFromGSheet();
-          setOrgNodes(loadedNodes.length > 0 ? loadedNodes : INITIAL_ORG_CHART);
+           const loadedNodes = await data.getOrgChartNodes();
+           setOrgNodes(loadedNodes.length > 0 ? loadedNodes : INITIAL_ORG_CHART);
         }
       } catch (err) {
         logger.error("Failed to fetch succession/orgchart data:", err);
@@ -80,34 +70,33 @@ export default function Succession({ employees, isMockMode, settings, department
     loadData();
   }, [isMockMode]);
 
-  // Persist Plans changes automatically
-  useEffect(() => {
-    if (!isDataLoaded) return;
-    let cancelled = false;
-    if (isMockMode) {
-      saveSuccessionPlans(plans);
-    } else {
-      import('../lib/storage').then(({ syncAllSuccessionPlansToGSheet }) => {
-        if (!cancelled) syncAllSuccessionPlansToGSheet(plans).catch(logger.error);
-      });
-    }
-    return () => { cancelled = true; };
-  }, [plans, isMockMode, isDataLoaded]);
+   // Persist Plans changes automatically
+   useEffect(() => {
+     if (!isDataLoaded) return;
+     let cancelled = false;
+     if (isMockMode) {
+       data.saveSuccessionPlans(plans);
+     } else {
+       data.getSuccessionPlans().then(currentPlans => {
+         if (!cancelled) data.saveSuccessionPlans(plans);
+       });
+     }
+     return () => { cancelled = true; };
+   }, [plans, isMockMode, isDataLoaded, data]);
 
-  // Save Nodes handler
-  const handleSaveNodes = async (newNodes: OrgChartNode[]) => {
-    setOrgNodes(newNodes);
-    if (isMockMode) {
-      saveOrgChartNodes(newNodes);
-    } else {
-      try {
-        const { syncAllOrgChartToGSheet } = await import('../lib/storage');
-        await syncAllOrgChartToGSheet(newNodes);
-      } catch (err) {
-        logger.error("Failed to sync org chart nodes:", err);
-      }
-    }
-  };
+   // Save Nodes handler
+   const handleSaveNodes = async (newNodes: OrgChartNode[]) => {
+     setOrgNodes(newNodes);
+     if (isMockMode) {
+       data.saveOrgChartNodes(newNodes);
+     } else {
+       try {
+         await data.saveOrgChartNodes(newNodes);
+       } catch (err) {
+         logger.error("Failed to sync org chart nodes:", err);
+       }
+     }
+   };
 
   // Modal State for Succession List
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -172,7 +161,7 @@ export default function Succession({ employees, isMockMode, settings, department
       handleSaveNodes(updatedNodes);
     }
 
-    addSheetLog("HumailEli_Succession", "INSERT", {
+    data.addSheetLog("HumailEli_Succession", "INSERT", {
       id: newPlan.id,
       roleName: newPlan.roleName,
       successor: newPlan.successorName
@@ -204,7 +193,7 @@ export default function Succession({ employees, isMockMode, settings, department
       handleSaveNodes(updatedNodes);
     }
 
-    addSheetLog("HumailEli_Succession", "DELETE", {
+    data.addSheetLog("HumailEli_Succession", "DELETE", {
       id,
       roleName: target.roleName
     });

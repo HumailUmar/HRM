@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Award, Plus, Edit2, Trash2, Save, X, 
   CheckCircle, AlertCircle 
 } from 'lucide-react';
 import { PayGrade } from '../types';
-import { getPayGrades, savePayGrades } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 
 export default function PayGradeManagement() {
-  const [payGrades, setPayGrades] = useState<PayGrade[]>(getPayGrades());
+  const data = useData();
+  const [payGrades, setPayGrades] = useState<PayGrade[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<PayGrade>>({
@@ -21,6 +22,12 @@ export default function PayGradeManagement() {
     isActive: true,
     description: ''
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    data.getPayGrades().then(grades => { if (!cancelled) setPayGrades(grades); });
+    return () => { cancelled = true; };
+  }, [data]);
 
   const handleSave = () => {
     if (!formData.name || !formData.code) {
@@ -51,18 +58,18 @@ export default function PayGradeManagement() {
     }
 
     setPayGrades(updated);
-    savePayGrades(updated);
+    await data.savePayGrades(updated);
     setShowAddModal(false);
     setEditingId(null);
     setFormData({ name: '', code: '', minSalary: 0, maxSalary: 0, currency: 'USD', level: 1, category: 'Staff', isActive: true, description: '' });
     alert(editingId ? 'Pay grade updated!' : 'Pay grade created!');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Delete this pay grade?')) return;
     const updated = payGrades.filter(g => g.id !== id);
     setPayGrades(updated);
-    savePayGrades(updated);
+    await data.savePayGrades(updated);
   };
 
   return (

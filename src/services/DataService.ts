@@ -362,6 +362,10 @@ export class DataService {
     return this.getAdapter().savePerformanceGoal(goal);
   }
 
+  async savePerformanceGoals(goals: PerformanceGoal[]): Promise<void> {
+    return this.getAdapter().savePerformanceGoals(goals);
+  }
+
   // ---- Training ----
   async getTrainingModules(): Promise<TrainingModule[]> {
     return this.getAdapter().getTrainingModules();
@@ -371,12 +375,24 @@ export class DataService {
     return this.getAdapter().saveTrainingModule(module);
   }
 
+  async saveTrainingModules(modules: TrainingModule[]): Promise<void> {
+    return this.getAdapter().saveTrainingModules(modules);
+  }
+
   async getTrainingAssignments(): Promise<TrainingAssignment[]> {
     return this.getAdapter().getTrainingAssignments();
   }
 
   async saveTrainingAssignment(assignment: TrainingAssignment): Promise<void> {
     return this.getAdapter().saveTrainingAssignment(assignment);
+  }
+
+  async saveTrainingAssignments(assignments: TrainingAssignment[]): Promise<void> {
+    return this.getAdapter().saveTrainingAssignments(assignments);
+  }
+
+  async getTrainingQuizzes(): Promise<TrainingQuiz[]> {
+    return this.getAdapter().getTrainingQuizzes();
   }
 
   // ---- Documents ----
@@ -457,6 +473,22 @@ export class DataService {
 
   saveBiometricDevices(devices: BiometricDeviceConfig[]): void {
     this.getAdapter().saveBiometricDevices(devices);
+  }
+
+  async getBiometricPunchRecords(): Promise<BiometricPunchRecord[]> {
+    return this.getAdapter().getBiometricPunchRecords();
+  }
+
+  async saveBiometricPunchRecords(records: BiometricPunchRecord[]): Promise<void> {
+    return this.getAdapter().saveBiometricPunchRecords(records);
+  }
+
+  async getBiometricSyncLogs(): Promise<BiometricSyncLog[]> {
+    return this.getAdapter().getBiometricSyncLogs();
+  }
+
+  async saveBiometricSyncLogs(logs: BiometricSyncLog[]): Promise<void> {
+    return this.getAdapter().saveBiometricSyncLogs(logs);
   }
 
   // ---- Storage Helpers / Logging ----
@@ -621,6 +653,18 @@ export class DataService {
 
   async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
     return this.getAdapter().getSalaryRevisionsByEmployee(employeeId);
+  }
+
+  async saveSalaryStructure(structure: SalaryStructure): Promise<void> {
+    return this.getAdapter().saveSalaryStructure(structure);
+  }
+
+  async getSalaryStructureByEmployee(employeeId: string): Promise<SalaryStructure | null> {
+    return this.getAdapter().getSalaryStructureByEmployee(employeeId);
+  }
+
+  async addSalaryRevision(revision: SalaryRevision): Promise<void> {
+    return this.getAdapter().addSalaryRevision(revision);
   }
 
   async getShifts(): Promise<Shift[]> {

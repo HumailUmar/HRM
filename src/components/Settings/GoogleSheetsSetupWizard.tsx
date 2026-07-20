@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getSettings, saveSettings } from '@/src/lib/storage';
+import { getSettings } from '@/src/lib/storage';
+import { useData } from '@/src/contexts/DataContext';
 import { getAuthHeaders } from '@/src/lib/auth';
 import { refreshDataAdapter } from '@/src/services';
 import { 
@@ -23,6 +24,7 @@ interface DriveFolder {
 type WizardStep = 'intro' | 'select-folder' | 'create-folder' | 'preview-sheets' | 'creating' | 'complete';
 
 export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCancel }: GoogleSheetsSetupWizardProps) {
+  const data = useData();
   const [settings] = useState(getSettings());
   const [step, setStep] = useState<WizardStep>('intro');
   const [folders, setFolders] = useState<DriveFolder[]>([]);
@@ -191,7 +193,7 @@ export default function GoogleSheetsSetupWizard({ accessToken, onComplete, onCan
             onboardingTasksSheet: 'HumailEli_OnboardingTasks',
           }
         };
-        saveSettings(updatedSettings);
+        await data.saveSettings(updatedSettings);
         refreshDataAdapter();
         
         setCreationStatus({

@@ -8,15 +8,7 @@ import {
   SalaryComponent, SalaryStructure, PayGrade, SalaryRevision,
   Employee 
 } from '../types';
-import {
-  getPayGrades,
-  saveSalaryStructure,
-  getSalaryStructureByEmployee,
-  getSalaryRevisionsByEmployee,
-  addSalaryRevision,
-  getSalaryStructures,
-  saveSalaryStructures
-} from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 
 interface EmployeeSalaryProps {
   employee: Employee;
@@ -58,7 +50,8 @@ const REVISION_REASONS = [
 ];
 
 export default function EmployeeSalary({ employee, onSave, isReadOnly = false }: EmployeeSalaryProps) {
-  const [payGrades, setPayGrades] = useState<PayGrade[]>(getPayGrades());
+  const data = useData();
+  const [payGrades, setPayGrades] = useState<PayGrade[]>([]);
   const [selectedCurrency, setSelectedCurrency] = useState<string>(employee.compensation.currency || 'USD');
   const [selectedPayGrade, setSelectedPayGrade] = useState<string>(employee.compensation.payGradeId || '');
   const [salaryComponents, setSalaryComponents] = useState<SalaryComponent[]>([]);
@@ -66,6 +59,28 @@ export default function EmployeeSalary({ employee, onSave, isReadOnly = false }:
   const [showHistory, setShowHistory] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showGradeModal, setShowGradeModal] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getPayGrades(), data.getSalaryStructureByEmployee(employee.id), data.getSalaryRevisionsByEmployee(employee.id)]).then(([grades, structure, history]) => {
+      if (!cancelled) {
+        setPayGrades(grades);
+        if (structure) {
+          setSalaryComponents(structure.components);
+          setSelectedCurrency(structure.currency || employee.compensation.currency || 'USD');
+          setSelectedPayGrade(structure.payGradeId || employee.compensation.payGradeId || '');
+        } else {
+          const defaultComponents = DEFAULT_COMPONENTS.map((comp, index) => ({
+            id: `COMP-${Date.now()}-${index}`,
+            ...comp
+          }));
+          setSalaryComponents(defaultComponents);
+        }
+        setSalaryHistory(history);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data, employee.id]);
 
   // New component form
   const [newComponentName, setNewComponentName] = useState('');
@@ -77,26 +92,6 @@ export default function EmployeeSalary({ employee, onSave, isReadOnly = false }:
   // Salary revision
   const [revisionReason, setRevisionReason] = useState('Annual Increment');
   const [revisionNotes, setRevisionNotes] = useState('');
-
-  // Load existing salary structure
-  useEffect(() => {
-    const structure = getSalaryStructureByEmployee(employee.id);
-    if (structure) {
-      setSalaryComponents(structure.components);
-      setSelectedCurrency(structure.currency || employee.compensation.currency || 'USD');
-      setSelectedPayGrade(structure.payGradeId || employee.compensation.payGradeId || '');
-    } else {
-      // Initialize with default components
-      const defaultComponents = DEFAULT_COMPONENTS.map((comp, index) => ({
-        id: `COMP-${Date.now()}-${index}`,
-        ...comp
-      }));
-      setSalaryComponents(defaultComponents);
-    }
-
-    const history = getSalaryRevisionsByEmployee(employee.id);
-    setSalaryHistory(history);
-  }, [employee.id]);
 
   // Calculate totals
   const calculateTotals = () => {
@@ -176,7 +171,7 @@ export default function EmployeeSalary({ employee, onSave, isReadOnly = false }:
     setSalaryComponents(updated);
   };
 
-  const handleSaveSalary = () => {
+  const handleSaveSalary = async () => {
     // Validate
     const basic = salaryComponents.find(c => c.name === 'Basic');
     if (!basic || basic.amount <= 0) {
@@ -196,7 +191,7 @@ export default function EmployeeSalary({ employee, onSave, isReadOnly = false }:
       }
     }
 
-    const existingStructure = getSalaryStructureByEmployee(employee.id);
+    const existingStructure = await data.getSalaryStructureByEmployee(employee.id);
     
     const newStructure: SalaryStructure = {
       id: existingStructure?.id || `SAL-${Date.now()}`,
@@ -232,16 +227,26 @@ export default function EmployeeSalary({ employee, onSave, isReadOnly = false }:
         notes: revisionNotes,
         createdAt: new Date().toISOString()
       };
-      addSalaryRevision(revision);
+      await data.addSalaryRevision(revision);
       setSalaryHistory([revision, ...salaryHistory]);
     }
 
     // Save structure
-    saveSalaryStructure(newStructure);
+    await data.saveSalaryStructure(newStructure);
     
     setIsEditing(false);
     alert('✅ Salary structure saved successfully!');
     onSave();
+  };
+
+  const handleCancelEdit = async () => {
+    setIsEditing(false);
+    const structure = await data.getSalaryStructureByEmployee(employee.id);
+    if (structure) {
+      setSalaryComponents(structure.components);
+      setSelectedCurrency(structure.currency);
+      setSelectedPayGrade(structure.payGradeId || '');
+    }
   };
 
   const getPayGradeName = (id: string) => {
@@ -335,7 +340,17 @@ export default function EmployeeSalary({ employee, onSave, isReadOnly = false }:
             if (grade) {
               const totalMonthly = salaryComponents.reduce((sum, c) => sum + c.amount, 0);
               const isWithinRange = totalMonthly >= grade.minSalary && totalMonthly <= grade.maxSalary;
-              return (
+  const handleCancelEdit = async () => {
+    setIsEditing(false);
+    const structure = await data.getSalaryStructureByEmployee(employee.id);
+    if (structure) {
+      setSalaryComponents(structure.components);
+      setSelectedCurrency(structure.currency);
+      setSelectedPayGrade(structure.payGradeId || '');
+    }
+  };
+
+  return (
                 <p className={`mt-1 ${isWithinRange ? 'text-emerald-600' : 'text-amber-600'}`}>
                   Salary Range: {formatCurrency(grade.minSalary)} - {formatCurrency(grade.maxSalary)}
                   {!isWithinRange && ' ⚠️ Current salary is outside this range'}
@@ -515,16 +530,7 @@ export default function EmployeeSalary({ employee, onSave, isReadOnly = false }:
       {isEditing && !isReadOnly && (
         <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button
-            onClick={() => {
-              setIsEditing(false);
-              // Reload original data
-              const structure = getSalaryStructureByEmployee(employee.id);
-              if (structure) {
-                setSalaryComponents(structure.components);
-                setSelectedCurrency(structure.currency);
-                setSelectedPayGrade(structure.payGradeId || '');
-              }
-            }}
+            onClick={handleCancelEdit}
             className="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all"
           >
             Cancel

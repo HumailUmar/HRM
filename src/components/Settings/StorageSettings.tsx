@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getSettings, saveSettings } from '@/src/lib/storage';
+import { getSettings } from '@/src/lib/storage';
+import { useData } from '@/src/contexts/DataContext';
 import { refreshDataAdapter, StorageType } from '@/src/services';
 import { 
   Database, 
@@ -18,6 +19,7 @@ interface StorageSettingsProps {
 }
 
 export default function StorageSettings({ onSettingsChange }: StorageSettingsProps) {
+  const data = useData();
   const [settings, setSettings] = useState(getSettings());
   const [selectedStorage, setSelectedStorage] = useState<StorageType>(
     (settings.storageType as StorageType) || 'local'
@@ -151,7 +153,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
     setShowConfirmDialog(true);
   };
 
-  const confirmSwitch = () => {
+  const confirmSwitch = async () => {
     if (!pendingStorageType) return;
     
     setIsLoading(true);
@@ -222,7 +224,7 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
       };
     }
 
-    saveSettings(updatedSettings);
+    await data.saveSettings(updatedSettings);
     setSettings(updatedSettings);
     setSelectedStorage(pendingStorageType);
     
@@ -538,10 +540,10 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
           <div className="flex justify-end pt-2">
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 // Save MySQL config to settings
                 const updatedSettings = buildUpdatedSettings();
-                saveSettings(updatedSettings);
+                await data.saveSettings(updatedSettings);
                 setSettings(updatedSettings);
                 alert('MySQL configuration saved!');
                 
@@ -654,10 +656,10 @@ export default function StorageSettings({ onSettingsChange }: StorageSettingsPro
           <div className="flex justify-end pt-2">
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 // Save PostgreSQL config to settings
                 const updatedSettings = buildUpdatedSettings();
-                saveSettings(updatedSettings);
+                await data.saveSettings(updatedSettings);
                 setSettings(updatedSettings);
                 alert('PostgreSQL configuration saved!');
                 

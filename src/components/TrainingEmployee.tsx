@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrainingAssignment, TrainingModule, TrainingMessage, Employee, User } from '../types';
-import { getTrainingAssignments, getTrainingModules, getTrainingMessages, saveTrainingMessages, getEmployees } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import TrainingPlayer from './TrainingPlayer';
 import { BookOpen, GraduationCap, Calendar, Clock, CheckCircle2, MessageSquare, Award, ArrowRight, CornerDownRight, Send } from 'lucide-react';
 
@@ -9,16 +9,30 @@ interface TrainingEmployeeProps {
 }
 
 export default function TrainingEmployee({ user }: TrainingEmployeeProps) {
-  const [employees] = useState<Employee[]>(getEmployees());
-  const currentEmployee = employees.find(e => e.email === user?.email);
+  const data = useData();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
+  const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
+  const [modules, setModules] = useState<TrainingModule[]>([]);
+  const [messages, setMessages] = useState<TrainingMessage[]>([]);
 
-  const [assignments, setAssignments] = useState<TrainingAssignment[]>(() => {
-    const all = getTrainingAssignments();
-    return currentEmployee ? all.filter(a => a.employeeId === currentEmployee.id) : [];
-  });
-
-  const [modules] = useState<TrainingModule[]>(getTrainingModules());
-  const [messages, setMessages] = useState<TrainingMessage[]>(getTrainingMessages());
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getEmployees(), data.getTrainingAssignments(), data.getTrainingModules(), data.getTrainingMessages()]).then(([emps, assigns, mods, msgs]) => {
+      if (!cancelled) {
+        setEmployees(emps);
+        setAssignments(assigns);
+        setModules(mods);
+        setMessages(msgs);
+        const emp = emps.find(e => e.email === user?.email) || null;
+        setCurrentEmployee(emp);
+        if (emp) {
+          setAssignments(assigns.filter(a => a.employeeId === emp.id));
+        }
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data, user]);
 
   // Active playing course
   const [activePlay, setActivePlay] = useState<{ assignment: TrainingAssignment; module: TrainingModule } | null>(null);
@@ -27,12 +41,13 @@ export default function TrainingEmployee({ user }: TrainingEmployeeProps) {
   const [activeChatMentor, setActiveChatMentor] = useState<{ id: string; name: string; assignmentId: string } | null>(null);
   const [chatText, setChatText] = useState('');
 
-  const refreshData = () => {
-    const all = getTrainingAssignments();
+  const refreshData = async () => {
+    const all = await data.getTrainingAssignments();
     if (currentEmployee) {
       setAssignments(all.filter(a => a.employeeId === currentEmployee.id));
     }
-    setMessages(getTrainingMessages());
+    const msgs = await data.getTrainingMessages();
+    setMessages(msgs);
   };
 
   const handleStartPlay = (assign: TrainingAssignment) => {
@@ -44,7 +59,7 @@ export default function TrainingEmployee({ user }: TrainingEmployeeProps) {
     setActivePlay({ assignment: assign, module: mod });
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChatMentor || !chatText.trim() || !currentEmployee) return;
 
@@ -62,7 +77,7 @@ export default function TrainingEmployee({ user }: TrainingEmployeeProps) {
 
     const updated = [...messages, newMsg];
     setMessages(updated);
-    saveTrainingMessages(updated);
+    await data.saveTrainingMessages(updated);
     setChatText('');
   };
 

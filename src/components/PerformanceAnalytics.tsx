@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Employee, PerformanceReview, User, Department, Designation } from '../types';
-import { getPerformanceReviews, getEmployees, getDepartments, getDesignations } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { getEmployeeDepartment, getEmployeeDesignation } from '../lib/employeeUtils';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -22,12 +22,24 @@ interface PerformanceAnalyticsProps {
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1'];
 
 export default function PerformanceAnalytics({ user, departments, designations }: PerformanceAnalyticsProps) {
-  const [employees] = useState<Employee[]>(getEmployees());
-  const [reviews] = useState<PerformanceReview[]>(getPerformanceReviews());
+  const data = useData();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState('All');
   const [reviewTypeFilter, setReviewTypeFilter] = useState('All');
   const [dateRangeStart, setDateRangeStart] = useState('');
   const [dateRangeEnd, setDateRangeEnd] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getEmployees(), data.getPerformanceReviews(), data.getDepartments(), data.getDesignations()]).then(([emps, revs, depts, designs]) => {
+      if (!cancelled) {
+        setEmployees(emps);
+        setReviews(revs);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   const deptOptions = ['All', ...departments.map(d => d.name)];
 

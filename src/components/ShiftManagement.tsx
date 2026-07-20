@@ -1,11 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Clock, Plus, Trash2, Edit2, Calendar, Repeat, UserPlus } from 'lucide-react';
 import { Shift, ShiftAssignment, ShiftSwapRequest, ShiftTemplate } from '../types';
-import { getShifts } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 
 export default function ShiftManagement() {
+  const data = useData();
   const [activeTab, setActiveTab] = useState<'list' | 'assignment' | 'swaps'>('list');
-  const [shifts, setShifts] = useState<Shift[]>(getShifts());
+  const [shifts, setShifts] = useState<Shift[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    data.getShifts().then(s => { if (!cancelled) setShifts(s); });
+    return () => { cancelled = true; };
+  }, [data]);
 
   return (
     <div className="p-6 space-y-6">

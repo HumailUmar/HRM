@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HireDetails, Candidate, OnboardingTemplate } from '../types';
 import { X, CheckCircle, ChevronRight, UserPlus } from 'lucide-react';
-import { getOnboardingTemplates, saveHires, getHires } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 
 interface Props {
   candidate: Candidate;
@@ -10,6 +10,7 @@ interface Props {
 }
 
 export const HireCandidateModal: React.FC<Props> = ({ candidate, onClose, onHire }) => {
+  const data = useData();
   const [step, setStep] = useState(1);
   const [hireDetails, setHireDetails] = useState<Partial<HireDetails>>({
     candidateId: candidate.id,
@@ -20,9 +21,15 @@ export const HireCandidateModal: React.FC<Props> = ({ candidate, onClose, onHire
     probationPeriodMonths: 3,
   });
 
-  const onboardingTemplates = getOnboardingTemplates();
+  const [onboardingTemplates, setOnboardingTemplates] = useState<OnboardingTemplate[]>([]);
 
-  const handleHire = () => {
+  useEffect(() => {
+    let cancelled = false;
+    data.getOnboardingTemplates().then(t => { if (!cancelled) setOnboardingTemplates(t); });
+    return () => { cancelled = true; };
+  }, [data]);
+
+  const handleHire = async () => {
     const newHire: HireDetails = {
       ...hireDetails as HireDetails,
       employeeId: `EMP-${Date.now()}`,
@@ -31,8 +38,8 @@ export const HireCandidateModal: React.FC<Props> = ({ candidate, onClose, onHire
       createdBy: 'HR-ADMIN',
     };
     
-    const existingHires = getHires();
-    saveHires([...existingHires, newHire]);
+    const existingHires = await data.getHires();
+    await data.saveHires([...existingHires, newHire]);
     onHire();
     onClose();
   };

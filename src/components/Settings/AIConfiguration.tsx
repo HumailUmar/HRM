@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Server,
   Globe, Cpu, BarChart3
 } from 'lucide-react';
-import { getSettings, saveSettings } from '../../lib/storage';
+import { useData } from '../../contexts/DataContext';
 import { getAuthHeaders } from '../../lib/auth';
 import { AppSettings } from '../../types';
 
@@ -30,6 +30,7 @@ interface AITrustLevel {
 }
 
 export default function AIConfiguration({ settings, onSettingsChange }: AIConfigurationProps) {
+  const data = useData();
   const [provider, setProvider] = useState<AIProvider>(
     (settings.ai.provider as AIProvider) || 'none'
   );
@@ -117,7 +118,7 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
     none: '—'
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const updatedSettings: AppSettings = {
       ...settings,
       ai: {
@@ -129,7 +130,7 @@ export default function AIConfiguration({ settings, onSettingsChange }: AIConfig
         enableAnalytics: aiFeatures.analytics,
       }
     };
-    saveSettings(updatedSettings);
+    await data.saveSettings(updatedSettings);
     if (onSettingsChange) onSettingsChange();
     alert('AI Configuration saved successfully!');
   };

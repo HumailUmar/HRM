@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { getTrainingRequests, saveTrainingRequests, getEmployees, getTrainingModules, saveTrainingModules, getTrainingAssignments, saveTrainingAssignments, getTrainingMentorships, saveTrainingMentorships } from '../lib/storage';
+import React, { useState, useEffect } from 'react';
 import { TrainingRequest, Employee, TrainingModule, TrainingAssignment, TrainingMentorship, User, Department, Designation } from '../types';
+import { useData } from '../contexts/DataContext';
 import { Plus, Check, X, AlertCircle, Clock, Send, Users, FileText, Bookmark, Calendar } from 'lucide-react';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 
@@ -11,10 +11,22 @@ interface TrainingRequestsProps {
 }
 
 export default function TrainingRequests({ user, departments, designations }: TrainingRequestsProps) {
-  const [requests, setRequests] = useState<TrainingRequest[]>(getTrainingRequests());
-  const [employees] = useState<Employee[]>(getEmployees());
+  const data = useData();
+  const [requests, setRequests] = useState<TrainingRequest[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState<TrainingRequest | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getTrainingRequests(), data.getEmployees()]).then(([reqs, emps]) => {
+      if (!cancelled) {
+        setRequests(reqs);
+        setEmployees(emps);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   // Form states
   const [courseTitle, setCourseTitle] = useState('');
@@ -33,7 +45,7 @@ export default function TrainingRequests({ user, departments, designations }: Tr
   // Get current manager's details if any
   const currentEmployee = employees.find(e => e.email === user?.email);
 
-  const handleCreateRequest = (e: React.FormEvent) => {
+  const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!courseTitle || !courseDescription || !whyNeeded || selectedEmployees.length === 0) {
       alert('Please fill out all fields and select at least one employee.');
@@ -57,7 +69,7 @@ export default function TrainingRequests({ user, departments, designations }: Tr
 
     const updatedRequests = [newRequest, ...requests];
     setRequests(updatedRequests);
-    saveTrainingRequests(updatedRequests);
+    await data.saveTrainingRequests(updatedRequests);
 
     // Reset Form
     setCourseTitle('');
@@ -68,7 +80,7 @@ export default function TrainingRequests({ user, departments, designations }: Tr
     setShowCreateForm(false);
   };
 
-  const handleReviewRequest = (req: TrainingRequest, status: 'Approved' | 'Rejected') => {
+  const handleReviewRequest = async (req: TrainingRequest, status: 'Approved' | 'Rejected') => {
     if (status === 'Approved' && !assignedMentorId) {
       alert('Please assign a mentor for this approved training.');
       return;
@@ -95,11 +107,11 @@ export default function TrainingRequests({ user, departments, designations }: Tr
     });
 
     setRequests(updatedRequests);
-    saveTrainingRequests(updatedRequests);
+    await data.saveTrainingRequests(updatedRequests);
 
     if (status === 'Approved') {
       // 1. Auto-create training module (Course)
-      const existingModules = getTrainingModules();
+      const existingModules = await data.getTrainingModules();
       const newModule: TrainingModule = {
         id: `MOD-${Date.now()}`,
         title: req.courseTitle,
@@ -113,10 +125,10 @@ export default function TrainingRequests({ user, departments, designations }: Tr
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      saveTrainingModules([...existingModules, newModule]);
+      await data.saveTrainingModules([...existingModules, newModule]);
 
       // 2. Create Training Assignments for target employees
-      const existingAssignments = getTrainingAssignments();
+      const existingAssignments = await data.getTrainingAssignments();
       const newAssignments: TrainingAssignment[] = req.targetEmployees.map(empId => {
         const emp = employees.find(e => e.id === empId);
         return {
@@ -134,11 +146,11 @@ export default function TrainingRequests({ user, departments, designations }: Tr
           notes: req.whyNeeded,
         };
       });
-      saveTrainingAssignments([...existingAssignments, ...newAssignments]);
+      await data.saveTrainingAssignments([...existingAssignments, ...newAssignments]);
 
       // 3. Create Training Mentorship relationships
       if (mentor) {
-        const existingMentorships = getTrainingMentorships();
+        const existingMentorships = await data.getTrainingMentorships();
         const newMentorships: TrainingMentorship[] = newAssignments.map(assign => ({
           id: `MENTOR-${Date.now()}-${assign.employeeId}`,
           trainingAssignmentId: assign.id,
@@ -152,7 +164,7 @@ export default function TrainingRequests({ user, departments, designations }: Tr
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }));
-        saveTrainingMentorships([...existingMentorships, ...newMentorships]);
+        await data.saveTrainingMentorships([...existingMentorships, ...newMentorships]);
       }
     }
 

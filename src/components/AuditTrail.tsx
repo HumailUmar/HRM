@@ -1,10 +1,17 @@
 import { useState, useMemo } from 'react';
 import { EmployeeHistoryEntry } from '../types';
-import { getEmployeeHistory } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { Search, Filter, Download, Activity, Clock, User, ArrowRight, FileText } from 'lucide-react';
 
 export default function AuditTrail() {
-  const [history] = useState<EmployeeHistoryEntry[]>(getEmployeeHistory());
+  const data = useData();
+  const [history, setHistory] = useState<EmployeeHistoryEntry[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    data.getEmployeeHistory().then(h => { if (!cancelled) setHistory(h); });
+    return () => { cancelled = true; };
+  }, [data]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
   

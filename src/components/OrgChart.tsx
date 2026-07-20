@@ -3,11 +3,11 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, SuccessionPlan, OrgChartNode, AppSettings, Department, Designation } from '../types';
 import { getEmployeeDesignation } from '../lib/employeeUtils';
+import { useData } from '../contexts/DataContext';
 import { 
   Plus, Trash2, Edit, Star, UserPlus, UserCheck, ChevronDown, 
   ChevronRight, Move, Check, X, AlertTriangle, ShieldAlert, GitMerge
 } from 'lucide-react';
-import { addSheetLog } from '../lib/storage';
 
 interface OrgChartProps {
   employees: Employee[];
@@ -32,6 +32,7 @@ export default function OrgChart({
   departments,
   designations
 }: OrgChartProps) {
+  const data = useData();
   const [isEditMode, setIsEditMode] = useState(false);
   const [layoutMode, setLayoutMode] = useState<'tree' | 'compact'>('tree');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -99,7 +100,7 @@ export default function OrgChart({
     });
 
     onSaveNodes(updated);
-    addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: draggedId, parentId: targetParentId, action: "MOVE" });
+    data.data.addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: draggedId, parentId: targetParentId, action: "MOVE" });
   };
 
   // Add Position
@@ -129,7 +130,7 @@ export default function OrgChart({
     setNewNodeEmpId('');
     setNewNodeIsCritical(false);
 
-    addSheetLog("HumailEli_Org_Chart", "INSERT", { id: newId, positionName: newNodeName });
+    data.addSheetLog("HumailEli_Org_Chart", "INSERT", { id: newId, positionName: newNodeName });
   };
 
   // Delete Position
@@ -157,7 +158,7 @@ export default function OrgChart({
       setIsDetailsOpen(false);
     }
 
-    addSheetLog("HumailEli_Org_Chart", "DELETE", { id, positionName: nodeToDelete.positionName });
+    data.addSheetLog("HumailEli_Org_Chart", "DELETE", { id, positionName: nodeToDelete.positionName });
   };
 
   // Assign Employee to Node
@@ -170,7 +171,7 @@ export default function OrgChart({
     });
     onSaveNodes(updated);
     setIsAssigningEmployee(false);
-    addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: nodeId, employeeId, action: "ASSIGN_EMPLOYEE" });
+    data.addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: nodeId, employeeId, action: "ASSIGN_EMPLOYEE" });
   };
 
   // Toggle Critical Flag
@@ -187,7 +188,7 @@ export default function OrgChart({
       return n;
     });
     onSaveNodes(updated);
-    addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: nodeId, action: "TOGGLE_CRITICAL" });
+    data.addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: nodeId, action: "TOGGLE_CRITICAL" });
   };
 
   // Update Risk Level
@@ -199,7 +200,7 @@ export default function OrgChart({
       return n;
     });
     onSaveNodes(updated);
-    addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: nodeId, riskLevel: risk, action: "UPDATE_RISK" });
+    data.addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: nodeId, riskLevel: risk, action: "UPDATE_RISK" });
   };
 
   // Add Successor
@@ -255,7 +256,7 @@ export default function OrgChart({
       });
     }
 
-    addSheetLog("HumailEli_Succession", "INSERT", {
+    data.addSheetLog("HumailEli_Succession", "INSERT", {
       id: newPlan.id,
       roleName: newPlan.roleName,
       successor: newPlan.successorName
@@ -282,7 +283,7 @@ export default function OrgChart({
     const updatedPlans = plans.filter(p => !(p.roleName === node.positionName && p.successorId === successorId));
     setPlans(updatedPlans);
 
-    addSheetLog("HumailEli_Succession", "DELETE", {
+    data.addSheetLog("HumailEli_Succession", "DELETE", {
       roleName: node.positionName,
       successorId
     });

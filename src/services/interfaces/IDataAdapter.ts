@@ -24,6 +24,11 @@ import {
   JobDescription,
   LegacyOnboardingTask,
   OnboardingTemplate,
+  TrainingQuiz,
+  SalaryStructure,
+  SalaryRevision,
+  BiometricPunchRecord,
+  BiometricSyncLog,
 } from '../../types';
 
 export interface IDataAdapter {
@@ -62,12 +67,16 @@ export interface IDataAdapter {
   savePerformanceReviews(reviews: PerformanceReview[]): Promise<void>;
   getPerformanceGoals(): Promise<PerformanceGoal[]>;
   savePerformanceGoal(goal: PerformanceGoal): Promise<void>;
+  savePerformanceGoals(goals: PerformanceGoal[]): Promise<void>;
 
   // TRAINING
   getTrainingModules(): Promise<TrainingModule[]>;
   saveTrainingModule(module: TrainingModule): Promise<void>;
+  saveTrainingModules(modules: TrainingModule[]): Promise<void>;
   getTrainingAssignments(): Promise<TrainingAssignment[]>;
   saveTrainingAssignment(assignment: TrainingAssignment): Promise<void>;
+  saveTrainingAssignments(assignments: TrainingAssignment[]): Promise<void>;
+  getTrainingQuizzes(): Promise<TrainingQuiz[]>;
 
   // DOCUMENTS
   getDocuments(): Promise<EmployeeDocument[]>;
@@ -95,6 +104,10 @@ export interface IDataAdapter {
   // BIOMETRIC DEVICES
   getBiometricDevices(): BiometricDeviceConfig[];
   saveBiometricDevices(devices: BiometricDeviceConfig[]): void;
+  getBiometricPunchRecords(): Promise<BiometricPunchRecord[]>;
+  saveBiometricPunchRecords(records: BiometricPunchRecord[]): Promise<void>;
+  getBiometricSyncLogs(): Promise<BiometricSyncLog[]>;
+  saveBiometricSyncLogs(logs: BiometricSyncLog[]): Promise<void>;
 
   // STORAGE HELPERS / LOGGING
   addSheetLog(sheetName: string, action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC', rowData: object): Promise<void>;
@@ -163,11 +176,14 @@ export interface IDataAdapter {
   saveSalaryComponents(components: SalaryComponent[]): Promise<void>;
   getSalaryStructures(): Promise<SalaryStructure[]>;
   saveSalaryStructures(structures: SalaryStructure[]): Promise<void>;
+  saveSalaryStructure(structure: SalaryStructure): Promise<void>;
+  getSalaryStructureByEmployee(employeeId: string): Promise<SalaryStructure | null>;
   getPayGrades(): Promise<PayGrade[]>;
   savePayGrades(payGrades: PayGrade[]): Promise<void>;
   getSalaryRevisions(): Promise<SalaryRevision[]>;
   saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void>;
   getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]>;
+  addSalaryRevision(revision: SalaryRevision): Promise<void>;
 
   // SHIFTS
   getShifts(): Promise<Shift[]>;

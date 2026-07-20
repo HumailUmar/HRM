@@ -7,6 +7,7 @@ import { ChartWrapper } from './ChartWrapper';
 import { 
   Candidate, JobDescription, StageTemplate, EvaluationScorecard, InterviewPanel 
 } from '../types';
+import { useData } from '../contexts/DataContext';
 import { 
   TrendingUp, TrendingDown, Users, CheckCircle, XCircle, Clock, AlertTriangle, 
   Filter, Download, FileText, Calendar, Target, Award, BrainCircuit, Activity
@@ -23,8 +24,8 @@ interface Props {
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1'];
 const PIE_COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
 
-import { saveRecruitmentAnalytics, getRecruitmentAnalytics, addSheetLog } from "../lib/storage";
 export default function RecruitmentAnalyticsDashboard({ candidates, jobDescriptions, stageTemplates, scorecards, interviewPanels }: Props) {
+  const data = useData();
   const [dateRange, setDateRange] = useState('30days'); // 7days, 30days, 90days, 12months, all
   
   // Basic calculations
@@ -148,9 +149,9 @@ export default function RecruitmentAnalyticsDashboard({ candidates, jobDescripti
                 stageDropOffData: JSON.stringify(rejectionReasons),
                 createdAt: new Date().toISOString()
               };
-              const currentData = getRecruitmentAnalytics();
-              saveRecruitmentAnalytics([...currentData, snapshot as any]);
-              addSheetLog("HumailEli_Recruitment_Analytics", "INSERT", snapshot);
+              const currentData = await data.getRecruitmentAnalytics();
+              await data.saveRecruitmentAnalytics([...currentData, snapshot as any]);
+              await data.addSheetLog("HumailEli_Recruitment_Analytics", "INSERT", snapshot);
               alert("Analytics Snapshot saved to Google Sheets!");
             }}
             className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 shadow-sm">

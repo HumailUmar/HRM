@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { getSettings } from '../../lib/storage';
+import React, { useState, useEffect } from 'react';
+import { useData } from '../../contexts/DataContext';
 import { refreshDataAdapter } from '../../services';
 import { Database, CheckCircle, AlertCircle, RefreshCw, Server } from 'lucide-react';
+import { AppSettings } from '../../types';
 
 interface DatabaseTestProps {
   onSettingsChange?: () => void;
@@ -23,7 +24,8 @@ interface DatabaseTestResult {
 }
 
 export default function DatabaseTest({ onSettingsChange }: DatabaseTestProps) {
-  const [settings] = useState(getSettings());
+  const data = useData();
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [mysqlResult, setMysqlResult] = useState<DatabaseTestResult>({
     status: 'idle',
     message: 'Click "Test MySQL" to check connection',
@@ -34,6 +36,14 @@ export default function DatabaseTest({ onSettingsChange }: DatabaseTestProps) {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    data.getSettings().then(s => {
+      if (!cancelled) setSettings(s);
+    });
+    return () => { cancelled = true; };
+  }, [data]);
+
   const testMySQLConnection = async () => {
     setMysqlResult({ status: 'testing', message: 'Testing MySQL connection...' });
     setIsLoading(true);
@@ -42,8 +52,7 @@ export default function DatabaseTest({ onSettingsChange }: DatabaseTestProps) {
     try {
       // Switch to MySQL and test
       const updatedSettings = { ...settings, storageType: 'mysql' as const };
-      const { saveSettings } = await import('../../lib/storage');
-      saveSettings(updatedSettings);
+      await data.saveSettings(updatedSettings);
       
       const adapter = refreshDataAdapter();
       
@@ -75,8 +84,7 @@ export default function DatabaseTest({ onSettingsChange }: DatabaseTestProps) {
       });
     } finally {
       // Restore original storage type
-      const { saveSettings } = await import('../../lib/storage');
-      saveSettings(settings);
+      if (settings) await data.saveSettings(settings);
       refreshDataAdapter();
       setIsLoading(false);
     }
@@ -90,8 +98,7 @@ export default function DatabaseTest({ onSettingsChange }: DatabaseTestProps) {
     try {
       // Switch to PostgreSQL and test
       const updatedSettings = { ...settings, storageType: 'postgresql' as const };
-      const { saveSettings } = await import('../../lib/storage');
-      saveSettings(updatedSettings);
+      await data.saveSettings(updatedSettings);
       
       const adapter = refreshDataAdapter();
       
@@ -122,8 +129,7 @@ export default function DatabaseTest({ onSettingsChange }: DatabaseTestProps) {
       });
     } finally {
       // Restore original storage type
-      const { saveSettings } = await import('../../lib/storage');
-      saveSettings(settings);
+      if (settings) await data.saveSettings(settings);
       refreshDataAdapter();
       setIsLoading(false);
     }

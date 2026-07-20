@@ -114,6 +114,14 @@ import {
   getStatusHistory,
   saveStatusHistory,
   getSheetLogs,
+  getTrainingQuizzes,
+  saveSalaryStructure,
+  getSalaryStructureByEmployee,
+  addSalaryRevision,
+  getBiometricPunchRecords,
+  saveBiometricPunchRecords,
+  getBiometricSyncLogs,
+  saveBiometricSyncLogs,
 } from '../lib/storage';
 import { DEFAULT_SETTINGS } from '../lib/mockData';
 import {
@@ -139,9 +147,9 @@ import {
   InterviewPanel,
   EvaluationScorecard,
   JDResumeMatch,
+  JobDescription,
   LegacyOnboardingTask,
   OnboardingTemplate,
-  JobDescription,
   ExitProcessStage,
   SettlementConfig,
   PerformanceReviewCycle,
@@ -171,6 +179,9 @@ import {
   OrgChartNode,
   SheetLog,
   EmployeeStatusHistory,
+  TrainingQuiz,
+  BiometricPunchRecord,
+  BiometricSyncLog,
 } from '../types';
 
 export class LocalStorageAdapter implements IDataAdapter {
@@ -303,6 +314,10 @@ export class LocalStorageAdapter implements IDataAdapter {
     savePerformanceGoals(goals);
   }
 
+  async savePerformanceGoals(goals: PerformanceGoal[]): Promise<void> {
+    savePerformanceGoals(goals);
+  }
+
   // TRAINING
   async getTrainingModules(): Promise<TrainingModule[]> {
     return getTrainingModules();
@@ -316,6 +331,10 @@ export class LocalStorageAdapter implements IDataAdapter {
     saveTrainingModules(modules);
   }
 
+  async saveTrainingModules(modules: TrainingModule[]): Promise<void> {
+    saveTrainingModules(modules);
+  }
+
   async getTrainingAssignments(): Promise<TrainingAssignment[]> {
     return getTrainingAssignments();
   }
@@ -326,6 +345,14 @@ export class LocalStorageAdapter implements IDataAdapter {
     if (index >= 0) assignments[index] = assignment;
     else assignments.push(assignment);
     saveTrainingAssignments(assignments);
+  }
+
+  async saveTrainingAssignments(assignments: TrainingAssignment[]): Promise<void> {
+    saveTrainingAssignments(assignments);
+  }
+
+  async getTrainingQuizzes(): Promise<TrainingQuiz[]> {
+    return getTrainingQuizzes();
   }
 
   // DOCUMENTS
@@ -413,6 +440,22 @@ export class LocalStorageAdapter implements IDataAdapter {
 
   saveBiometricDevices(devices: BiometricDeviceConfig[]): void {
     saveBiometricDevices(devices);
+  }
+
+  async getBiometricPunchRecords(): Promise<BiometricPunchRecord[]> {
+    return getBiometricPunchRecords();
+  }
+
+  async saveBiometricPunchRecords(records: BiometricPunchRecord[]): Promise<void> {
+    saveBiometricPunchRecords(records);
+  }
+
+  async getBiometricSyncLogs(): Promise<BiometricSyncLog[]> {
+    return getBiometricSyncLogs();
+  }
+
+  async saveBiometricSyncLogs(logs: BiometricSyncLog[]): Promise<void> {
+    saveBiometricSyncLogs(logs);
   }
 
   // RECRUITMENT HELPERS
@@ -618,6 +661,24 @@ export class LocalStorageAdapter implements IDataAdapter {
   async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
     const revisions = getSalaryRevisions();
     return revisions.filter(r => r.employeeId === employeeId);
+  }
+
+  async saveSalaryStructure(structure: SalaryStructure): Promise<void> {
+    const structures = getSalaryStructures();
+    const index = structures.findIndex((s) => s.employeeId === structure.employeeId);
+    if (index >= 0) structures[index] = structure;
+    else structures.push(structure);
+    saveSalaryStructures(structures);
+  }
+
+  async getSalaryStructureByEmployee(employeeId: string): Promise<SalaryStructure | null> {
+    return getSalaryStructureByEmployee(employeeId);
+  }
+
+  async addSalaryRevision(revision: SalaryRevision): Promise<void> {
+    const revisions = getSalaryRevisions();
+    revisions.push(revision);
+    saveSalaryRevisions(revisions);
   }
 
   async getShifts(): Promise<Shift[]> {

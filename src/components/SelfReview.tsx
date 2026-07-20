@@ -1,16 +1,29 @@
 import { logger } from '../lib/logger';
 import React, { useState, useEffect } from 'react';
 import { User, PerformanceReviewCycle, PerformanceReview, ReviewTemplateSection, ReviewQuestion, Employee } from '../types';
-import { getPerformanceReviewCycles, getPerformanceReviews, savePerformanceReviews, getEmployees } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { ChevronRight, ClipboardList, CheckCircle, Clock, Save, Send, ArrowLeft } from 'lucide-react';
 
 export default function SelfReview({ employeeId }: { employeeId?: string }) {
-  const [cycles] = useState<PerformanceReviewCycle[]>(getPerformanceReviewCycles());
-  const [reviews, setReviews] = useState<PerformanceReview[]>(getPerformanceReviews());
-  const [employees] = useState<Employee[]>(getEmployees());
+  const data = useData();
+  const [cycles, setCycles] = useState<PerformanceReviewCycle[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<PerformanceReviewCycle | null>(null);
   const [currentReview, setCurrentReview] = useState<PerformanceReview | null>(null);
   const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getPerformanceReviewCycles(), data.getPerformanceReviews(), data.getEmployees()]).then(([cyc, revs, emps]) => {
+      if (!cancelled) {
+        setCycles(cyc);
+        setReviews(revs);
+        setEmployees(emps);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   if (!employeeId) return <div>Please log in as an employee to view reviews.</div>;
   const employee = employees.find(e => e.id === employeeId);
@@ -36,7 +49,7 @@ export default function SelfReview({ employeeId }: { employeeId?: string }) {
     setProgress(Math.round((answeredQuestions / totalQuestions) * 100));
   }, [currentReview, selectedCycle]);
 
-  const handleStartReview = (cycle: PerformanceReviewCycle) => {
+  const handleStartReview = async (cycle: PerformanceReviewCycle) => {
     let review = employeeReviews.find(r => r.reviewCycleId === cycle.id);
     if (!review) {
       review = {
@@ -63,7 +76,7 @@ export default function SelfReview({ employeeId }: { employeeId?: string }) {
       };
       const updated = [...reviews, review];
       setReviews(updated);
-      savePerformanceReviews(updated);
+      await data.savePerformanceReviews(updated);
     }
     setSelectedCycle(cycle);
     setCurrentReview(review);
@@ -81,15 +94,15 @@ export default function SelfReview({ employeeId }: { employeeId?: string }) {
     setCurrentReview({ ...currentReview, questionScores: newScores, updatedAt: new Date().toISOString() });
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     if (!currentReview) return;
     const updated = reviews.map(r => r.id === currentReview.id ? currentReview : r);
     setReviews(updated);
-    savePerformanceReviews(updated);
+    await data.savePerformanceReviews(updated);
     alert('Draft saved successfully!');
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!currentReview || !selectedCycle) return;
 
     // 1. Validate required questions
@@ -117,7 +130,7 @@ export default function SelfReview({ employeeId }: { employeeId?: string }) {
 
     const updated = reviews.map(r => r.id === finalizedReview.id ? finalizedReview : r);
     setReviews(updated);
-    savePerformanceReviews(updated);
+    await data.savePerformanceReviews(updated);
 
     // 3. Simulate notification (optional)
     logger.info(`Notification: Self-review submitted by ${employeeName || employeeId} for ${selectedCycle.name}`);

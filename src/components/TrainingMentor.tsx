@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrainingMentorship, TrainingSubmission, TrainingCheckIn, TrainingMessage, Employee, TrainingAssignment, User, Department, Designation } from '../types';
-import { getTrainingMentorships, saveTrainingMentorships, getTrainingSubmissions, saveTrainingSubmissions, getTrainingCheckIns, saveTrainingCheckIns, getTrainingMessages, saveTrainingMessages, getEmployees, getTrainingAssignments, saveTrainingAssignments } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 import { Users, BookOpen, Clock, CheckCircle2, MessageSquare, AlertCircle, Calendar, Plus, Send } from 'lucide-react';
 
@@ -11,22 +11,33 @@ interface TrainingMentorProps {
 }
 
 export default function TrainingMentor({ user, departments, designations }: TrainingMentorProps) {
-  const [employees] = useState<Employee[]>(getEmployees());
-  const currentEmployee = employees.find(e => e.email === user?.email);
+  const data = useData();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
+  const [mentorships, setMentorships] = useState<TrainingMentorship[]>([]);
+  const [submissions, setSubmissions] = useState<TrainingSubmission[]>([]);
+  const [checkIns, setCheckIns] = useState<TrainingCheckIn[]>([]);
+  const [messages, setMessages] = useState<TrainingMessage[]>([]);
 
-  const [mentorships, setMentorships] = useState<TrainingMentorship[]>(() => {
-    const all = getTrainingMentorships();
-    return currentEmployee ? all.filter(m => m.mentorId === currentEmployee.id) : [];
-  });
-
-  const [submissions, setSubmissions] = useState<TrainingSubmission[]>(() => {
-    const all = getTrainingSubmissions();
-    const menteeIds = mentorships.map(m => m.menteeId);
-    return all.filter(s => menteeIds.includes(s.employeeId) && s.status === 'PendingReview');
-  });
-
-  const [checkIns, setCheckIns] = useState<TrainingCheckIn[]>(getTrainingCheckIns());
-  const [messages, setMessages] = useState<TrainingMessage[]>(getTrainingMessages());
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getEmployees(), data.getTrainingMentorships(), data.getTrainingSubmissions(), data.getTrainingCheckIns(), data.getTrainingMessages()]).then(([emps, ment, subs, checks, msgs]) => {
+      if (!cancelled) {
+        setEmployees(emps);
+        const emp = emps.find(e => e.email === user?.email) || null;
+        setCurrentEmployee(emp);
+        if (emp) {
+          const activeMent = ment.filter(m => m.mentorId === emp.id);
+          setMentorships(activeMent);
+          const menteeIds = activeMent.map(m => m.menteeId);
+          setSubmissions(subs.filter(s => menteeIds.includes(s.employeeId) && s.status === 'PendingReview'));
+        }
+        setCheckIns(checks);
+        setMessages(msgs);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data, user]);
 
   // Interactivity
   const [activeMenteeChat, setActiveMenteeChat] = useState<{ id: string; name: string; mentorshipId: string } | null>(null);
@@ -43,25 +54,27 @@ export default function TrainingMentor({ user, departments, designations }: Trai
   const [reviewGrade, setReviewGrade] = useState(100);
   const [reviewFeedback, setReviewFeedback] = useState('');
 
-  const refreshData = () => {
-    const allMent = getTrainingMentorships();
+  const refreshData = async () => {
+    const allMent = await data.getTrainingMentorships();
     if (currentEmployee) {
       const activeMent = allMent.filter(m => m.mentorId === currentEmployee.id);
       setMentorships(activeMent);
 
-      const allSub = getTrainingSubmissions();
+      const allSub = await data.getTrainingSubmissions();
       const menteeIds = activeMent.map(m => m.menteeId);
       setSubmissions(allSub.filter(s => menteeIds.includes(s.employeeId) && s.status === 'PendingReview'));
     }
-    setCheckIns(getTrainingCheckIns());
-    setMessages(getTrainingMessages());
+    const checks = await data.getTrainingCheckIns();
+    setCheckIns(checks);
+    const msgs = await data.getTrainingMessages();
+    setMessages(msgs);
   };
 
-  const handleReviewSubmission = (status: 'Approved' | 'Rejected') => {
+  const handleReviewSubmission = async (status: 'Approved' | 'Rejected') => {
     if (!selectedSubForReview) return;
 
     // 1. Update Submission status
-    const allSub = getTrainingSubmissions();
+    const allSub = await data.getTrainingSubmissions();
     const updatedSub = allSub.map(s => {
       if (s.id === selectedSubForReview.id) {
         return {
@@ -74,11 +87,11 @@ export default function TrainingMentor({ user, departments, designations }: Trai
       }
       return s;
     });
-    saveTrainingSubmissions(updatedSub);
+    await data.saveTrainingSubmissions(updatedSub);
 
     // 2. Update Assignment progress
     if (selectedSubForReview.assignmentId) {
-      const assigns = getTrainingAssignments();
+      const assigns = await data.getTrainingAssignments();
       const updatedAssigns = assigns.map(a => {
         if (a.id === selectedSubForReview.assignmentId) {
           const isApproved = status === 'Approved';
@@ -93,16 +106,16 @@ export default function TrainingMentor({ user, departments, designations }: Trai
         }
         return a;
       });
-      saveTrainingAssignments(updatedAssigns);
+      await data.saveTrainingAssignments(updatedAssigns);
     }
 
     alert(`Task has been successfully reviewed & ${status.toLowerCase()}!`);
     setSelectedSubForReview(null);
     setReviewFeedback('');
-    refreshData();
+    await refreshData();
   };
 
-  const handleRecordCheckIn = (e: React.FormEvent) => {
+  const handleRecordCheckIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMentorshipForCheckIn || !currentEmployee) return;
 
@@ -119,10 +132,10 @@ export default function TrainingMentor({ user, departments, designations }: Trai
 
     const updatedCheckIns = [newCheckIn, ...checkIns];
     setCheckIns(updatedCheckIns);
-    saveTrainingCheckIns(updatedCheckIns);
+    await data.saveTrainingCheckIns(updatedCheckIns);
 
     // Update mentorship last and next check-in dates
-    const allMent = getTrainingMentorships();
+    const allMent = await data.getTrainingMentorships();
     const updatedMent = allMent.map(m => {
       if (m.id === selectedMentorshipForCheckIn.id) {
         return {
@@ -134,7 +147,7 @@ export default function TrainingMentor({ user, departments, designations }: Trai
       }
       return m;
     });
-    saveTrainingMentorships(updatedMent);
+    await data.saveTrainingMentorships(updatedMent);
 
     setCheckInNotes('');
     setCheckInFeedback('');
@@ -144,7 +157,7 @@ export default function TrainingMentor({ user, departments, designations }: Trai
     refreshData();
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeMenteeChat || !chatText.trim() || !currentEmployee) return;
 
@@ -162,7 +175,7 @@ export default function TrainingMentor({ user, departments, designations }: Trai
 
     const updated = [...messages, newMsg];
     setMessages(updated);
-    saveTrainingMessages(updated);
+    await data.saveTrainingMessages(updated);
     setChatText('');
   };
 

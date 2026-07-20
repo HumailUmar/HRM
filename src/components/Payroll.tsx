@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Employee, AttendanceRecord, PayrollRecord, AppSettings, Department, Designation } from '../types';
 import { Cpu, Save, Sliders, CheckCircle, Sparkles, TrendingUp, DollarSign, PieChart, ShieldAlert, FileText } from 'lucide-react';
-import { addSheetLog } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { exportPayrollReportToPDF } from '../utils/pdfGenerator';
 import { getEmployeeBaseSalary } from '../lib/employeeUtils';
 
@@ -26,6 +26,7 @@ export default function Payroll({
   departments,
   designations
 }: PayrollProps) {
+  const data = useData();
   // Generate last 3 months dynamically
   const monthOptions = useMemo(() => {
     const months = [];
@@ -160,7 +161,7 @@ export default function Payroll({
     setHasProcessed(false);
 
     finalized.forEach(record => {
-      addSheetLog(settings.googleSheets.payrollSheet, "INSERT", record);
+      data.addSheetLog(settings.googleSheets.payrollSheet, "INSERT", record);
     });
 
     alert(`Salary sheet successfully saved! Dispatched rows to "${settings.googleSheets.payrollSheet}" sheet sync.`);

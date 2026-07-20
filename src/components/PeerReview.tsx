@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PerformanceReviewCycle, PerformanceReview, Employee, PeerAssignment } from '../types';
-import { getPerformanceReviewCycles, getPerformanceReviews, savePerformanceReviews, getEmployees, getPeerAssignments, savePeerAssignments } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { ChevronRight, Clock, Save, Send, ArrowLeft, Users } from 'lucide-react';
 
 interface PeerReviewProps {
@@ -9,14 +9,28 @@ interface PeerReviewProps {
 }
 
 export default function PeerReview({ userId, userName }: PeerReviewProps) {
-  const [cycles] = useState<PerformanceReviewCycle[]>(getPerformanceReviewCycles());
-  const [reviews, setReviews] = useState<PerformanceReview[]>(getPerformanceReviews());
-  const [employees] = useState<Employee[]>(getEmployees());
-  const [assignments, setAssignments] = useState<PeerAssignment[]>(getPeerAssignments());
+  const data = useData();
+  const [cycles, setCycles] = useState<PerformanceReviewCycle[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [assignments, setAssignments] = useState<PeerAssignment[]>([]);
   const [selectedPeer, setSelectedPeer] = useState<Employee | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<PerformanceReviewCycle | null>(null);
   const [currentReview, setCurrentReview] = useState<PerformanceReview | null>(null);
   const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getPerformanceReviewCycles(), data.getPerformanceReviews(), data.getEmployees(), data.getPeerAssignments()]).then(([cyc, revs, emps, assigns]) => {
+      if (!cancelled) {
+        setCycles(cyc);
+        setReviews(revs);
+        setEmployees(emps);
+        setAssignments(assigns);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   if (!userId) return <div>Please log in to view peer reviews.</div>;
 
@@ -69,7 +83,7 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
       };
       const updated = [...reviews, review];
       setReviews(updated);
-      savePerformanceReviews(updated);
+      await data.savePerformanceReviews(updated);
     }
     setSelectedPeer(peer);
     setSelectedCycle(cycle);
@@ -88,11 +102,11 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
     setCurrentReview({ ...currentReview, questionScores: newScores, updatedAt: new Date().toISOString() });
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     if (!currentReview) return;
     const updated = reviews.map(r => r.id === currentReview.id ? currentReview : r);
     setReviews(updated);
-    savePerformanceReviews(updated);
+    await data.savePerformanceReviews(updated);
     alert('Draft saved successfully!');
   };
 
@@ -122,7 +136,7 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
 
     const updated = reviews.map(r => r.id === finalizedReview.id ? finalizedReview : r);
     setReviews(updated);
-    savePerformanceReviews(updated);
+    await data.savePerformanceReviews(updated);
 
     // Update assignment status
     const updatedAssignments = assignments.map(a => {
@@ -132,7 +146,7 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
       return a;
     });
     setAssignments(updatedAssignments);
-    savePeerAssignments(updatedAssignments);
+    await data.savePeerAssignments(updatedAssignments);
 
     alert('Review submitted successfully!');
     setSelectedPeer(null);

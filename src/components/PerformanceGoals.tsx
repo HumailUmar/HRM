@@ -1,27 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Plus, Edit2, Trash2, CheckCircle2, Calendar, Award, TrendingUp, Sparkles, User, Tag, ShieldAlert } from 'lucide-react';
 import { PerformanceGoal, User as UserType } from '../types';
-import { getPerformanceGoals, savePerformanceGoals } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 
 export default function PerformanceGoals({ user }: { user: UserType | null }) {
+  const data = useData();
   const [goals, setGoals] = useState<PerformanceGoal[]>([]);
   const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
   const [quickUpdateId, setQuickUpdateId] = useState<string | null>(null);
   const [quickActualValue, setQuickActualValue] = useState<number>(0);
 
   useEffect(() => {
-    // Load and normalize goals for this employee
-    const loadedGoals = getPerformanceGoals()
-      .filter(g => g.employeeId === user?.employeeId)
-      .map(g => ({
-        ...g,
-        targetValue: g.targetValue ?? 100,
-        actualValue: g.actualValue ?? g.progress ?? 0,
-      }));
-    setGoals(loadedGoals);
-  }, [user]);
+    let cancelled = false;
+    data.getPerformanceGoals().then(allGoals => {
+      if (!cancelled) {
+        const loadedGoals = allGoals
+          .filter(g => g.employeeId === user?.employeeId)
+          .map(g => ({
+            ...g,
+            targetValue: g.targetValue ?? 100,
+            actualValue: g.actualValue ?? g.progress ?? 0,
+          }));
+        setGoals(loadedGoals);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data, user]);
 
-  const handleSave = (goal: PerformanceGoal) => {
+  const handleSave = async (goal: PerformanceGoal) => {
     // Enforce safety constraints
     const target = Math.max(1, Number(goal.targetValue) || 100);
     const actual = Math.max(0, Number(goal.actualValue) || 0);
@@ -46,10 +52,16 @@ export default function PerformanceGoals({ user }: { user: UserType | null }) {
       updatedAt: new Date().toISOString(),
     };
 
-    const allGoals = getPerformanceGoals();
+    const allGoals = await data.getPerformanceGoals();
     const isNew = !allGoals.some(g => g.id === goal.id);
-    const updatedAll = isNew 
-      ? [...allGoals, updatedGoal] 
+    if (isNew) {
+      await data.savePerformanceGoal(updatedGoal);
+    } else {
+      await data.savePerformanceGoal(updatedGoal);
+    }
+
+    const updatedAll = isNew
+      ? [...allGoals, updatedGoal]
       : allGoals.map(g => g.id === goal.id ? updatedGoal : g);
 
     setGoals(updatedAll.filter(g => g.employeeId === user?.employeeId).map(g => ({
@@ -58,11 +70,10 @@ export default function PerformanceGoals({ user }: { user: UserType | null }) {
       actualValue: g.actualValue ?? g.progress ?? 0,
     })));
     
-    savePerformanceGoals(updatedAll);
     setEditingGoal(null);
   };
 
-  const handleQuickSave = (goal: PerformanceGoal, newActual: number) => {
+  const handleQuickSave = async (goal: PerformanceGoal, newActual: number) => {
     const target = Math.max(1, goal.targetValue ?? 100);
     const actual = Math.max(0, newActual);
     const computedProgress = Math.round((actual / target) * 100);
@@ -84,29 +95,29 @@ export default function PerformanceGoals({ user }: { user: UserType | null }) {
       updatedAt: new Date().toISOString(),
     };
 
-    const allGoals = getPerformanceGoals();
+    const allGoals = await data.getPerformanceGoals();
     const updatedAll = allGoals.map(g => g.id === goal.id ? updatedGoal : g);
 
     setGoals(updatedAll.filter(g => g.employeeId === user?.employeeId).map(g => ({
       ...g,
       targetValue: g.targetValue ?? 100,
       actualValue: g.actualValue ?? g.progress ?? 0,
-    })));
+    }));
 
-    savePerformanceGoals(updatedAll);
+    await data.savePerformanceGoal(updatedGoal);
     setQuickUpdateId(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this performance goal?')) {
-      const allGoals = getPerformanceGoals();
+      const allGoals = await data.getPerformanceGoals();
       const updatedAll = allGoals.filter(g => g.id !== id);
       setGoals(updatedAll.filter(g => g.employeeId === user?.employeeId).map(g => ({
         ...g,
         targetValue: g.targetValue ?? 100,
         actualValue: g.actualValue ?? g.progress ?? 0,
       })));
-      savePerformanceGoals(updatedAll);
+      await data.savePerformanceGoals(updatedAll);
     }
   };
 

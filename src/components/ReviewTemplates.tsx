@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Archive, X, PlusCircle, Trash2 as TrashIcon, Eye } from 'lucide-react';
 import { PerformanceReviewTemplate, ReviewTemplateSection, ReviewQuestion } from '../types';
-import { getPerformanceReviewTemplates, savePerformanceReviewTemplates } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 
 export default function ReviewTemplates() {
+  const data = useData();
   const [templates, setTemplates] = useState<PerformanceReviewTemplate[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -12,10 +13,11 @@ export default function ReviewTemplates() {
   const [sections, setSections] = useState<ReviewTemplateSection[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<{ sectionIndex: number; questionIndex: number } | null>(null);
 
-  // Load templates on mount
   useEffect(() => {
-    setTemplates(getPerformanceReviewTemplates());
-  }, []);
+    let cancelled = false;
+    data.getPerformanceReviewTemplates().then(t => { if (!cancelled) setTemplates(t); });
+    return () => { cancelled = true; };
+  }, [data]);
 
   // Open modal for new template
   const handleCreateNew = () => {
@@ -64,7 +66,7 @@ export default function ReviewTemplates() {
       id: editingTemplate.id || `tmpl-${Date.now()}`
     };
 
-    const currentTemplates = getPerformanceReviewTemplates();
+    const currentTemplates = await data.getPerformanceReviewTemplates();
     let updated;
     if (editingTemplate.id) {
       updated = currentTemplates.map(t => t.id === templateToSave.id ? templateToSave : t);
@@ -73,18 +75,17 @@ export default function ReviewTemplates() {
     }
 
     setTemplates(updated);
-    savePerformanceReviewTemplates(updated);
+    await data.savePerformanceReviewTemplates(updated);
     setIsOpen(false);
     setEditingTemplate(null);
     setSections([]);
     alert(`Template "${templateToSave.name}" saved successfully!`);
   };
 
-  // Archive/Activate
-  const handleArchive = (id: string) => {
+  const handleArchive = async (id: string) => {
     const updated = templates.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t);
     setTemplates(updated);
-    savePerformanceReviewTemplates(updated);
+    await data.savePerformanceReviewTemplates(updated);
   };
 
   // Section management

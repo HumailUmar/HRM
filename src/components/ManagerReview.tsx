@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PerformanceReviewCycle, PerformanceReview, Employee } from '../types';
-import { getPerformanceReviewCycles, getPerformanceReviews, savePerformanceReviews, getEmployees } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { ChevronRight, ClipboardList, CheckCircle, Clock, Save, Send, ArrowLeft } from 'lucide-react';
 
 interface ManagerReviewProps {
@@ -9,13 +9,26 @@ interface ManagerReviewProps {
 }
 
 export default function ManagerReview({ managerId, managerName }: ManagerReviewProps) {
-  const [cycles] = useState<PerformanceReviewCycle[]>(getPerformanceReviewCycles());
-  const [reviews, setReviews] = useState<PerformanceReview[]>(getPerformanceReviews());
-  const [employees] = useState<Employee[]>(getEmployees());
+  const data = useData();
+  const [cycles, setCycles] = useState<PerformanceReviewCycle[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<PerformanceReviewCycle | null>(null);
   const [currentReview, setCurrentReview] = useState<PerformanceReview | null>(null);
   const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getPerformanceReviewCycles(), data.getPerformanceReviews(), data.getEmployees()]).then(([cyc, revs, emps]) => {
+      if (!cancelled) {
+        setCycles(cyc);
+        setReviews(revs);
+        setEmployees(emps);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   if (!managerId) return <div>Please log in as a manager to view team reviews.</div>;
 
@@ -65,7 +78,7 @@ export default function ManagerReview({ managerId, managerName }: ManagerReviewP
       };
       const updated = [...reviews, review];
       setReviews(updated);
-      savePerformanceReviews(updated);
+      await data.savePerformanceReviews(updated);
     }
     setSelectedEmployee(employee);
     setSelectedCycle(cycle);
@@ -84,11 +97,11 @@ export default function ManagerReview({ managerId, managerName }: ManagerReviewP
     setCurrentReview({ ...currentReview, questionScores: newScores, updatedAt: new Date().toISOString() });
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     if (!currentReview) return;
     const updated = reviews.map(r => r.id === currentReview.id ? currentReview : r);
     setReviews(updated);
-    savePerformanceReviews(updated);
+    await data.savePerformanceReviews(updated);
     alert('Draft saved successfully!');
   };
 
@@ -119,7 +132,7 @@ export default function ManagerReview({ managerId, managerName }: ManagerReviewP
 
     const updated = reviews.map(r => r.id === finalizedReview.id ? finalizedReview : r);
     setReviews(updated);
-    savePerformanceReviews(updated);
+    await data.savePerformanceReviews(updated);
 
     alert('Review submitted successfully!');
     setSelectedEmployee(null);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Employee, PerformanceReview, PerformanceReviewCycle } from '../types';
-import { getPerformanceReviews, getEmployees, getPerformanceReviewCycles } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { 
   User, Users, Star, Award, TrendingUp, TrendingDown, 
   CheckCircle, Clock, AlertCircle, ChevronRight, 
@@ -25,11 +25,24 @@ interface ReviewAggregate {
 }
 
 export default function Feedback360({ userId, userRole }: Feedback360Props) {
-  const [employees] = useState<Employee[]>(getEmployees());
-  const [reviews] = useState<PerformanceReview[]>(getPerformanceReviews());
-  const [cycles] = useState<PerformanceReviewCycle[]>(getPerformanceReviewCycles());
+  const data = useData();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [reviews, setReviews] = useState<PerformanceReview[]>([]);
+  const [cycles, setCycles] = useState<PerformanceReviewCycle[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showReport, setShowReport] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getEmployees(), data.getPerformanceReviews(), data.getPerformanceReviewCycles()]).then(([emps, revs, cyc]) => {
+      if (!cancelled) {
+        setEmployees(emps);
+        setReviews(revs);
+        setCycles(cyc);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   if (!userId) return <div>Please log in to view 360 feedback.</div>;
 

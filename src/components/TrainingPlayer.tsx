@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrainingModule, TrainingSubmission, TrainingAssignment, TrainingQuiz, TrainingQuizQuestion } from '../types';
-import { getTrainingQuizzes, getTrainingSubmissions, saveTrainingSubmissions, getTrainingAssignments, saveTrainingAssignments } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { CheckCircle, AlertCircle, FileText, Video, Link as LinkIcon, Download, Award, ChevronLeft, ChevronRight, Play, UploadCloud } from 'lucide-react';
 
 interface TrainingPlayerProps {
@@ -11,15 +11,25 @@ interface TrainingPlayerProps {
 }
 
 export default function TrainingPlayer({ module, assignment, onClose, onComplete }: TrainingPlayerProps) {
-  const [submission, setSubmission] = useState<TrainingSubmission | null>(() => {
-    const subs = getTrainingSubmissions();
-    return subs.find(s => s.moduleId === module.id && s.employeeId === assignment.employeeId) || null;
-  });
+  const data = useData();
+  const [submission, setSubmission] = useState<TrainingSubmission | null>(null);
+  const [quizzes, setQuizzes] = useState<TrainingQuiz[]>([]);
+  const [currentQuiz, setCurrentQuiz] = useState<TrainingQuiz | null>(null);
+  const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
 
-  const [quizzes] = useState<TrainingQuiz[]>(getTrainingQuizzes());
-  const [currentQuiz, setCurrentQuiz] = useState<TrainingQuiz | null>(() => {
-    return quizzes.find(q => q.moduleId === module.id) || null;
-  });
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([data.getTrainingSubmissions(), data.getTrainingQuizzes(), data.getTrainingAssignments()]).then(([subs, quizList, assigns]) => {
+      if (!cancelled) {
+        const foundSub = subs.find(s => s.moduleId === module.id && s.employeeId === assignment.employeeId) || null;
+        setSubmission(foundSub);
+        setQuizzes(quizList);
+        setCurrentQuiz(quizList.find(q => q.moduleId === module.id) || null);
+        setAssignments(assigns);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data, module.id, assignment.employeeId]);
 
   // Quiz interactive state
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
@@ -33,8 +43,8 @@ export default function TrainingPlayer({ module, assignment, onClose, onComplete
   // Video interactive state
   const [videoProgress, setVideoProgress] = useState(0);
 
-  const updateSubmissionProgress = (progress: number, status: TrainingSubmission['status'], extraData: Partial<TrainingSubmission> = {}) => {
-    const subs = getTrainingSubmissions();
+  const updateSubmissionProgress = async (progress: number, status: TrainingSubmission['status'], extraData: Partial<TrainingSubmission> = {}) => {
+    const subs = await data.getTrainingSubmissions();
     let updatedSubs: TrainingSubmission[] = [];
 
     const existingSub = subs.find(s => s.moduleId === module.id && s.employeeId === assignment.employeeId);
@@ -67,10 +77,10 @@ export default function TrainingPlayer({ module, assignment, onClose, onComplete
       updatedSubs = [...subs, newSub];
     }
 
-    saveTrainingSubmissions(updatedSubs);
+    await data.saveTrainingSubmissions(updatedSubs);
 
     // Also update assignment progress
-    const assigns = getTrainingAssignments();
+    const assigns = await data.getTrainingAssignments();
     const updatedAssigns = assigns.map(a => {
       if (a.id === assignment.id) {
         const isComplete = targetStatus === 'Completed';
@@ -83,7 +93,7 @@ export default function TrainingPlayer({ module, assignment, onClose, onComplete
       }
       return a;
     });
-    saveTrainingAssignments(updatedAssigns);
+    await data.saveTrainingAssignments(updatedAssigns);
 
     if (progress === 100 || targetStatus === 'PendingReview') {
       onComplete();

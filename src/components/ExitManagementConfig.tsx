@@ -1,13 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Plus, Trash2, Edit } from 'lucide-react';
-import { getExitChecklistTemplates, saveExitChecklistTemplates, getExitInterviewTemplates, saveExitInterviewTemplates, getExitProcessStages, saveExitProcessStages, getSettlementConfig, saveSettlementConfig } from '../lib/storage';
+import { useData } from '../contexts/DataContext';
 import { ExitChecklistTemplate, ExitInterviewTemplate, ExitProcessStage, SettlementConfig } from '../types';
 
 export default function ExitManagementConfig() {
-  const [checklistTemplates, setChecklistTemplates] = useState<ExitChecklistTemplate[]>(getExitChecklistTemplates());
-  const [interviewTemplates, setInterviewTemplates] = useState<ExitInterviewTemplate[]>(getExitInterviewTemplates());
-  const [stages, setStages] = useState<ExitProcessStage[]>(getExitProcessStages());
-  const [settlementConfig, setSettlementConfig] = useState<SettlementConfig | null>(getSettlementConfig());
+  const data = useData();
+  const [checklistTemplates, setChecklistTemplates] = useState<ExitChecklistTemplate[]>([]);
+  const [interviewTemplates, setInterviewTemplates] = useState<ExitInterviewTemplate[]>([]);
+  const [stages, setStages] = useState<ExitProcessStage[]>([]);
+  const [settlementConfig, setSettlementConfig] = useState<SettlementConfig | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      data.getExitChecklistTemplates(),
+      data.getExitInterviewTemplates(),
+      data.getExitProcessStages(),
+      data.getSettlementConfig()
+    ]).then(([checklists, interviews, procStages, settlement]) => {
+      if (!cancelled) {
+        setChecklistTemplates(checklists);
+        setInterviewTemplates(interviews);
+        setStages(procStages);
+        setSettlementConfig(settlement);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   return (
     <div className="p-6 space-y-6">

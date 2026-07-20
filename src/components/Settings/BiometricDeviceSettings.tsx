@@ -9,18 +9,10 @@ import {
   BiometricDeviceConfig, 
   BiometricDeviceType, 
   BiometricPunchRecord,
-  BiometricSyncLog 
+  BiometricSyncLog,
+  AppSettings
 } from '../../types';
-import {
-  getBiometricDevices,
-  saveBiometricDevices,
-  getBiometricPunchRecords,
-  saveBiometricPunchRecords,
-  getBiometricSyncLogs,
-  saveBiometricSyncLogs,
-  getEmployees,
-  getSettings
-} from '../../lib/storage';
+import { useData } from '../../contexts/DataContext';
 import { getBiometricAdapter, BiometricDeviceTypeNames } from '../../services/biometric/BiometricAdapterFactory';
 import { biometricSyncService } from '../../services/biometric/BiometricSyncService';
 
@@ -29,9 +21,11 @@ interface BiometricDeviceSettingsProps {
 }
 
 export default function BiometricDeviceSettings({ user }: BiometricDeviceSettingsProps) {
-  const [devices, setDevices] = useState<BiometricDeviceConfig[]>(getBiometricDevices());
-  const [punchRecords, setPunchRecords] = useState<BiometricPunchRecord[]>(getBiometricPunchRecords());
-  const [syncLogs, setSyncLogs] = useState<BiometricSyncLog[]>(getBiometricSyncLogs());
+  const data = useData();
+  const [devices, setDevices] = useState<BiometricDeviceConfig[]>([]);
+  const [punchRecords, setPunchRecords] = useState<BiometricPunchRecord[]>([]);
+  const [syncLogs, setSyncLogs] = useState<BiometricSyncLog[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<BiometricDeviceConfig | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -40,16 +34,35 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; deviceId: string } | null>(null);
 
   useEffect(() => {
-    // Automatically purge legacy/simulated mock biometric punch records from real storage
-    const allRecords = getBiometricPunchRecords();
-    const hasMockRecords = allRecords.some(r => r.mock || r.id.startsWith('PUNCH-') || r.id.startsWith('MOCK-'));
-    if (hasMockRecords) {
-      const cleanedRecords = allRecords.filter(r => !r.mock && !r.id.startsWith('PUNCH-') && !r.id.startsWith('MOCK-'));
-      saveBiometricPunchRecords(cleanedRecords);
-      setPunchRecords(cleanedRecords);
-      console.log('🧹 Cleaned up legacy/fabricated mock punch records from storage.');
-    }
-  }, []);
+    let cancelled = false;
+    Promise.all([data.getBiometricDevices(), data.getBiometricPunchRecords(), data.getBiometricSyncLogs(), data.getSettings()]).then(([devs, punches, logs, s]) => {
+      if (!cancelled) {
+        setDevices(devs);
+        setPunchRecords(punches);
+        setSyncLogs(logs);
+        setSettings(s);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
+
+  useEffect(() => {
+    let cancelled = false;
+    data.getBiometricPunchRecords().then(allRecords => {
+      if (cancelled) return;
+      const hasMockRecords = allRecords.some(r => r.mock || r.id.startsWith('PUNCH-') || r.id.startsWith('MOCK-'));
+      if (hasMockRecords) {
+        const cleanedRecords = allRecords.filter(r => !r.mock && !r.id.startsWith('PUNCH-') && !r.id.startsWith('MOCK-'));
+        data.saveBiometricPunchRecords(cleanedRecords).then(() => {
+          if (!cancelled) {
+            setPunchRecords(cleanedRecords);
+            console.log('🧹 Cleaned up legacy/fabricated mock punch records from storage.');
+          }
+        });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [data]);
 
   const handlePushEmployeesToDevice = async () => {
     const activeDevice = devices.find(d => d.isActive);
@@ -58,7 +71,7 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
       return;
     }
 
-    const employeesList = getEmployees();
+    const employeesList = await data.getEmployees();
     if (employeesList.length === 0) {
       alert('No employees found to sync.');
       return;
@@ -101,7 +114,7 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
     return BiometricDeviceTypeNames[type] || type;
   };
 
-  const handleSaveDevice = (e: React.FormEvent) => {
+  const handleSaveDevice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       alert('Device name is required');
@@ -133,26 +146,26 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
     }
 
     setDevices(updatedDevices);
-    saveBiometricDevices(updatedDevices);
+    data.saveBiometricDevices(updatedDevices);
     resetForm();
     setShowAddForm(false);
     alert(editingId ? 'Device updated successfully!' : 'Device added successfully!');
   };
 
-  const handleDeleteDevice = (id: string) => {
+  const handleDeleteDevice = async (id: string) => {
     if (!confirm('Are you sure you want to delete this device?')) return;
     const updatedDevices = devices.filter(d => d.id !== id);
     setDevices(updatedDevices);
-    saveBiometricDevices(updatedDevices);
+    data.saveBiometricDevices(updatedDevices);
   };
 
-  const handleSetActive = (id: string) => {
+  const handleSetActive = async (id: string) => {
     const updatedDevices = devices.map(d => ({
       ...d,
       isActive: d.id === id
     }));
     setDevices(updatedDevices);
-    saveBiometricDevices(updatedDevices);
+    data.saveBiometricDevices(updatedDevices);
   };
 
   const handleTestConnection = async (device: BiometricDeviceConfig) => {
@@ -191,8 +204,8 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
     };
 
     try {
-      const settings = getSettings();
-      if (device.type === 'mock' && !settings.isMockMode) {
+      const currentSettings = settings || await data.getSettings();
+      if (device.type === 'mock' && !currentSettings.isMockMode) {
         throw new Error('Mock Mode must be enabled in Settings to use a Mock biometric device.');
       }
 
@@ -201,7 +214,7 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
       const result = await adapter.syncAttendance();
       
       // Save punch records to storage
-      const existingRecords = getBiometricPunchRecords();
+      const existingRecords = await data.getBiometricPunchRecords();
       
       // Filter out mock records from saving to the persistent store
       const realRecords = result.records.filter(r => !r.mock);
@@ -213,7 +226,7 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
       
       const updatedRecords = [...existingRealRecords, ...newRecords];
       setPunchRecords(updatedRecords);
-      saveBiometricPunchRecords(updatedRecords);
+      await data.saveBiometricPunchRecords(updatedRecords);
       
       log.recordsSynced = newRecords.length;
       log.status = 'success';
@@ -222,14 +235,14 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
       
       const updatedLogs = [log, ...syncLogs];
       setSyncLogs(updatedLogs);
-      saveBiometricSyncLogs(updatedLogs);
+      await data.saveBiometricSyncLogs(updatedLogs);
       
       // Update device last sync
       const updatedDevices = devices.map(d => 
         d.id === device.id ? { ...d, lastSync: new Date().toISOString() } : d
       );
       setDevices(updatedDevices);
-      saveBiometricDevices(updatedDevices);
+      data.saveBiometricDevices(updatedDevices);
       
       if (result.isMock) {
         alert('Sync completed! Mock records are simulated but not saved to persistent storage to prevent data pollution.');
@@ -243,7 +256,7 @@ export default function BiometricDeviceSettings({ user }: BiometricDeviceSetting
       
       const updatedLogs = [log, ...syncLogs];
       setSyncLogs(updatedLogs);
-      saveBiometricSyncLogs(updatedLogs);
+      await data.saveBiometricSyncLogs(updatedLogs);
       
       alert(`Sync failed: ${error.message || 'Unknown error'}`);
     } finally {
