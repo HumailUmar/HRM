@@ -200,17 +200,17 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = employees.findIndex((e) => e.id === employee.id);
     if (index >= 0) employees[index] = employee;
     else employees.push(employee);
-    saveEmployees(employees);
+    await saveEmployees(employees);
     return employee;
   }
 
   async saveEmployees(employees: Employee[]): Promise<void> {
-    saveEmployees(employees);
+    await saveEmployees(employees);
   }
 
   async deleteEmployee(id: string): Promise<void> {
     const employees = getEmployees();
-    saveEmployees(employees.filter((e) => e.id !== id));
+    await saveEmployees(employees.filter((e) => e.id !== id));
   }
 
   // ATTENDANCE
@@ -223,7 +223,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveAttendance(records: AttendanceRecord[]): Promise<void> {
-    saveAttendance(records);
+    await saveAttendance(records);
   }
 
   async saveAttendanceRecord(record: AttendanceRecord): Promise<void> {
@@ -231,7 +231,7 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = records.findIndex((r) => r.id === record.id);
     if (index >= 0) records[index] = record;
     else records.push(record);
-    saveAttendance(records);
+    await saveAttendance(records);
   }
 
   // LEAVE
@@ -248,11 +248,11 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = leaves.findIndex((l) => l.id === leave.id);
     if (index >= 0) leaves[index] = leave;
     else leaves.push(leave);
-    saveLeaves(leaves);
+    await saveLeaves(leaves);
   }
 
   async saveLeaves(leaves: LeaveRecord[]): Promise<void> {
-    saveLeaves(leaves);
+    await saveLeaves(leaves);
   }
 
   // PAYROLL
@@ -265,7 +265,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async savePayroll(records: PayrollRecord[]): Promise<void> {
-    savePayroll(records);
+    await savePayroll(records);
   }
 
   // RECRUITMENT
@@ -278,11 +278,11 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = candidates.findIndex((c) => c.id === candidate.id);
     if (index >= 0) candidates[index] = candidate;
     else candidates.push(candidate);
-    saveCandidates(candidates);
+    await saveCandidates(candidates);
   }
 
   async saveCandidates(candidates: Candidate[]): Promise<void> {
-    saveCandidates(candidates);
+    await saveCandidates(candidates);
   }
 
   // PERFORMANCE
@@ -295,11 +295,11 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = reviews.findIndex((r) => r.id === review.id);
     if (index >= 0) reviews[index] = review;
     else reviews.push(review);
-    savePerformanceReviews(reviews);
+    await savePerformanceReviews(reviews);
   }
 
   async savePerformanceReviews(reviews: PerformanceReview[]): Promise<void> {
-    savePerformanceReviews(reviews);
+    await savePerformanceReviews(reviews);
   }
 
   async getPerformanceGoals(): Promise<PerformanceGoal[]> {
@@ -311,11 +311,11 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = goals.findIndex((g) => g.id === goal.id);
     if (index >= 0) goals[index] = goal;
     else goals.push(goal);
-    savePerformanceGoals(goals);
+    await savePerformanceGoals(goals);
   }
 
   async savePerformanceGoals(goals: PerformanceGoal[]): Promise<void> {
-    savePerformanceGoals(goals);
+    await savePerformanceGoals(goals);
   }
 
   // TRAINING
@@ -328,11 +328,11 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = modules.findIndex((m) => m.id === module.id);
     if (index >= 0) modules[index] = module;
     else modules.push(module);
-    saveTrainingModules(modules);
+    await saveTrainingModules(modules);
   }
 
   async saveTrainingModules(modules: TrainingModule[]): Promise<void> {
-    saveTrainingModules(modules);
+    await saveTrainingModules(modules);
   }
 
   async getTrainingAssignments(): Promise<TrainingAssignment[]> {
@@ -344,11 +344,11 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = assignments.findIndex((a) => a.id === assignment.id);
     if (index >= 0) assignments[index] = assignment;
     else assignments.push(assignment);
-    saveTrainingAssignments(assignments);
+    await saveTrainingAssignments(assignments);
   }
 
   async saveTrainingAssignments(assignments: TrainingAssignment[]): Promise<void> {
-    saveTrainingAssignments(assignments);
+    await saveTrainingAssignments(assignments);
   }
 
   async getTrainingQuizzes(): Promise<TrainingQuiz[]> {
@@ -365,7 +365,7 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = docs.findIndex((d) => d.id === document.id);
     if (index >= 0) docs[index] = document;
     else docs.push(document);
-    saveEmployeeDocuments(docs);
+    await saveEmployeeDocuments(docs);
   }
 
   async getEmployeeDocuments(): Promise<EmployeeDocument[]> {
@@ -378,7 +378,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
-    saveEmployeeDocuments(docs);
+    await saveEmployeeDocuments(docs);
   }
 
   // JOB DESCRIPTIONS / ONBOARDING
@@ -430,7 +430,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveSettings(settings: AppSettings): Promise<void> {
-    saveSettings(settings);
+    await saveSettings(settings);
   }
 
   // BIOMETRIC DEVICES
@@ -447,7 +447,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveBiometricPunchRecords(records: BiometricPunchRecord[]): Promise<void> {
-    saveBiometricPunchRecords(records);
+    await saveBiometricPunchRecords(records);
   }
 
   async getBiometricSyncLogs(): Promise<BiometricSyncLog[]> {
@@ -455,7 +455,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveBiometricSyncLogs(logs: BiometricSyncLog[]): Promise<void> {
-    saveBiometricSyncLogs(logs);
+    await saveBiometricSyncLogs(logs);
   }
 
   // RECRUITMENT HELPERS
@@ -464,7 +464,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveStageTemplates(templates: StageTemplate[]): Promise<void> {
-    saveStageTemplates(templates);
+    await saveStageTemplates(templates);
   }
 
   async getInterviewPanels(): Promise<InterviewPanel[]> {
@@ -472,7 +472,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveInterviewPanels(panels: InterviewPanel[]): Promise<void> {
-    saveInterviewPanels(panels);
+    await saveInterviewPanels(panels);
   }
 
   async getScorecards(): Promise<EvaluationScorecard[]> {
@@ -480,7 +480,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveScorecards(scorecards: EvaluationScorecard[]): Promise<void> {
-    saveScorecards(scorecards);
+    await saveScorecards(scorecards);
   }
 
   async getJDMatches(): Promise<JDResumeMatch[]> {
@@ -488,7 +488,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveJDMatches(matches: JDResumeMatch[]): Promise<void> {
-    saveJDMatches(matches);
+    await saveJDMatches(matches);
   }
 
   // STORAGE HELPERS / LOGGING
@@ -497,7 +497,7 @@ export class LocalStorageAdapter implements IDataAdapter {
     action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC',
     rowData: object,
   ): Promise<void> {
-    addSheetLog(sheetName, action, rowData);
+    await addSheetLog(sheetName, action, rowData);
   }
 
   generateEmployeeDiff(
@@ -522,7 +522,7 @@ export class LocalStorageAdapter implements IDataAdapter {
 
   // HISTORY & EXIT
   async addEmployeeHistory(entry: EmployeeHistoryEntry): Promise<void> {
-    addEmployeeHistory([entry]);
+    await addEmployeeHistory([entry]);
   }
 
   async getEmployeeHistory(employeeId: string): Promise<EmployeeHistoryEntry[]> {
@@ -530,7 +530,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async createExitRecord(record: ExitRecord): Promise<void> {
-    createExitRecord(record);
+    await createExitRecord(record);
   }
 
   async getExitRecords(): Promise<ExitRecord[]> {
@@ -551,7 +551,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveExitProcessStages(stages: ExitProcessStage[]): Promise<void> {
-    saveExitProcessStages(stages);
+    await saveExitProcessStages(stages);
   }
 
   async getSettlementConfig(): Promise<SettlementConfig | null> {
@@ -559,7 +559,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveSettlementConfig(config: SettlementConfig): Promise<void> {
-    saveSettlementConfig(config);
+    await saveSettlementConfig(config);
   }
 
   async getPerformanceReviewCycles(): Promise<PerformanceReviewCycle[]> {
@@ -567,7 +567,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async savePerformanceReviewCycles(cycles: PerformanceReviewCycle[]): Promise<void> {
-    savePerformanceReviewCycles(cycles);
+    await savePerformanceReviewCycles(cycles);
   }
 
   async getPerformanceReviewTemplates(): Promise<PerformanceReviewTemplate[]> {
@@ -575,7 +575,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async savePerformanceReviewTemplates(templates: PerformanceReviewTemplate[]): Promise<void> {
-    savePerformanceReviewTemplates(templates);
+    await savePerformanceReviewTemplates(templates);
   }
 
   async getTrainingSubmissions(): Promise<TrainingSubmission[]> {
@@ -583,7 +583,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveTrainingSubmissions(submissions: TrainingSubmission[]): Promise<void> {
-    saveTrainingSubmissions(submissions);
+    await saveTrainingSubmissions(submissions);
   }
 
   async getPeerAssignments(): Promise<PeerAssignment[]> {
@@ -591,7 +591,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async savePeerAssignments(assignments: PeerAssignment[]): Promise<void> {
-    savePeerAssignments(assignments);
+    await savePeerAssignments(assignments);
   }
 
   async getTrainingRequests(): Promise<TrainingRequest[]> {
@@ -599,7 +599,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveTrainingRequests(requests: TrainingRequest[]): Promise<void> {
-    saveTrainingRequests(requests);
+    await saveTrainingRequests(requests);
   }
 
   async getTrainingMentorships(): Promise<TrainingMentorship[]> {
@@ -607,7 +607,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveTrainingMentorships(mentorships: TrainingMentorship[]): Promise<void> {
-    saveTrainingMentorships(mentorships);
+    await saveTrainingMentorships(mentorships);
   }
 
   async getTrainingCheckIns(): Promise<TrainingCheckIn[]> {
@@ -615,7 +615,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveTrainingCheckIns(checkIns: TrainingCheckIn[]): Promise<void> {
-    saveTrainingCheckIns(checkIns);
+    await saveTrainingCheckIns(checkIns);
   }
 
   async getTrainingMessages(): Promise<TrainingMessage[]> {
@@ -623,7 +623,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveTrainingMessages(messages: TrainingMessage[]): Promise<void> {
-    saveTrainingMessages(messages);
+    await saveTrainingMessages(messages);
   }
 
   async getSalaryComponents(): Promise<SalaryComponent[]> {
@@ -631,7 +631,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveSalaryComponents(components: SalaryComponent[]): Promise<void> {
-    saveSalaryComponents(components);
+    await saveSalaryComponents(components);
   }
 
   async getSalaryStructures(): Promise<SalaryStructure[]> {
@@ -639,7 +639,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveSalaryStructures(structures: SalaryStructure[]): Promise<void> {
-    saveSalaryStructures(structures);
+    await saveSalaryStructures(structures);
   }
 
   async getPayGrades(): Promise<PayGrade[]> {
@@ -647,7 +647,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async savePayGrades(payGrades: PayGrade[]): Promise<void> {
-    savePayGrades(payGrades);
+    await savePayGrades(payGrades);
   }
 
   async getSalaryRevisions(): Promise<SalaryRevision[]> {
@@ -655,7 +655,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void> {
-    saveSalaryRevisions(revisions);
+    await saveSalaryRevisions(revisions);
   }
 
   async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
@@ -668,7 +668,7 @@ export class LocalStorageAdapter implements IDataAdapter {
     const index = structures.findIndex((s) => s.employeeId === structure.employeeId);
     if (index >= 0) structures[index] = structure;
     else structures.push(structure);
-    saveSalaryStructures(structures);
+    await saveSalaryStructures(structures);
   }
 
   async getSalaryStructureByEmployee(employeeId: string): Promise<SalaryStructure | null> {
@@ -678,7 +678,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   async addSalaryRevision(revision: SalaryRevision): Promise<void> {
     const revisions = getSalaryRevisions();
     revisions.push(revision);
-    saveSalaryRevisions(revisions);
+    await saveSalaryRevisions(revisions);
   }
 
   async getShifts(): Promise<Shift[]> {
@@ -686,7 +686,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveShifts(shifts: Shift[]): Promise<void> {
-    saveShifts(shifts);
+    await saveShifts(shifts);
   }
 
   async getShiftAssignments(): Promise<ShiftAssignment[]> {
@@ -694,7 +694,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveShiftAssignments(assignments: ShiftAssignment[]): Promise<void> {
-    saveShiftAssignments(assignments);
+    await saveShiftAssignments(assignments);
   }
 
   async getShiftSwapRequests(): Promise<ShiftSwapRequest[]> {
@@ -702,7 +702,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveShiftSwapRequests(requests: ShiftSwapRequest[]): Promise<void> {
-    saveShiftSwapRequests(requests);
+    await saveShiftSwapRequests(requests);
   }
 
   async getShiftTemplates(): Promise<ShiftTemplate[]> {
@@ -710,7 +710,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveShiftTemplates(templates: ShiftTemplate[]): Promise<void> {
-    saveShiftTemplates(templates);
+    await saveShiftTemplates(templates);
   }
 
   async getCurrencies(): Promise<Currency[]> {
@@ -718,7 +718,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveCurrencies(currencies: Currency[]): Promise<void> {
-    saveCurrencies(currencies);
+    await saveCurrencies(currencies);
   }
 
   async getTaxRules(): Promise<TaxRule[]> {
@@ -726,7 +726,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveTaxRules(rules: TaxRule[]): Promise<void> {
-    saveTaxRules(rules);
+    await saveTaxRules(rules);
   }
 
   async getStatutoryDeductions(): Promise<StatutoryDeduction[]> {
@@ -734,7 +734,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveStatutoryDeductions(deductions: StatutoryDeduction[]): Promise<void> {
-    saveStatutoryDeductions(deductions);
+    await saveStatutoryDeductions(deductions);
   }
 
   async getPayrollCalculations(): Promise<PayrollCalculation[]> {
@@ -742,7 +742,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async savePayrollCalculations(calculations: PayrollCalculation[]): Promise<void> {
-    savePayrollCalculations(calculations);
+    await savePayrollCalculations(calculations);
   }
 
   async getLeavePolicies(): Promise<LeavePolicy[]> {
@@ -750,7 +750,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveLeavePolicies(policies: LeavePolicy[]): Promise<void> {
-    saveLeavePolicies(policies);
+    await saveLeavePolicies(policies);
   }
 
   async getLeaveTypeConfigs(): Promise<any[]> {
@@ -758,7 +758,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveLeaveTypeConfigs(configs: any[]): Promise<void> {
-    saveLeaveTypeConfigs(configs);
+    await saveLeaveTypeConfigs(configs);
   }
 
   async getRecruitmentAnalytics(): Promise<RecruitmentAnalytics[]> {
@@ -766,7 +766,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveRecruitmentAnalytics(analytics: RecruitmentAnalytics[]): Promise<void> {
-    saveRecruitmentAnalytics(analytics);
+    await saveRecruitmentAnalytics(analytics);
   }
 
   async getHires(): Promise<HireDetails[]> {
@@ -774,7 +774,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveHires(hires: HireDetails[]): Promise<void> {
-    saveHires(hires);
+    await saveHires(hires);
   }
 
   async getInterviewSchedules(): Promise<InterviewSchedule[]> {
@@ -782,7 +782,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void> {
-    saveInterviewSchedules(schedules);
+    await saveInterviewSchedules(schedules);
   }
 
   async getOrgChartNodes(): Promise<OrgChartNode[]> {
@@ -790,7 +790,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveOrgChartNodes(nodes: OrgChartNode[]): Promise<void> {
-    saveOrgChartNodes(nodes);
+    await saveOrgChartNodes(nodes);
   }
 
   async getPayslips(): Promise<any[]> {
@@ -798,7 +798,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async savePayslips(payslips: any[]): Promise<void> {
-    savePayslips(payslips);
+    await savePayslips(payslips);
   }
 
   async getNotifications(): Promise<any[]> {
@@ -806,7 +806,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveNotifications(notifications: any[]): Promise<void> {
-    saveNotifications(notifications);
+    await saveNotifications(notifications);
   }
 
   async getUsers(): Promise<any[]> {
@@ -814,7 +814,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveUsers(users: any[]): Promise<void> {
-    saveUsers(users);
+    await saveUsers(users);
   }
 
   async getStatusHistory(): Promise<EmployeeStatusHistory[]> {
@@ -822,7 +822,7 @@ export class LocalStorageAdapter implements IDataAdapter {
   }
 
   async saveStatusHistory(history: EmployeeStatusHistory[]): Promise<void> {
-    saveStatusHistory(history);
+    await saveStatusHistory(history);
   }
 
   async getSheetLogs(): Promise<SheetLog[]> {

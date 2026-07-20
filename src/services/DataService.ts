@@ -53,6 +53,9 @@ import {
   OrgChartNode,
   SheetLog,
   EmployeeStatusHistory,
+  TrainingQuiz,
+  BiometricPunchRecord,
+  BiometricSyncLog,
 } from '../types';
 import { IDataAdapter } from './interfaces/IDataAdapter';
 import { LocalStorageAdapter } from './adapters/LocalStorageAdapter';
@@ -63,6 +66,7 @@ import { getSettings } from '../lib/storage';
 import { Schemas, EntityType } from '../lib/schemas';
 import { enqueueRequest } from '../lib/offlineQueue';
 import { showToast } from '../components/Toast';
+import { logger } from '../lib/logger';
 
 export class DataService {
   private adapter: IDataAdapter;

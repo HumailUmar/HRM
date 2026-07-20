@@ -1,16 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { DataService } from '../services/DataService';
 import { AppSettings } from '../types';
 
 const DataContext = createContext<DataService | null>(null);
 
 export const DataProvider: React.FC<{ settings: AppSettings; children: React.ReactNode }> = ({ settings, children }) => {
-  const [service, setService] = useState<DataService>(() => new DataService(settings));
-
-  useEffect(() => {
-    // Recreate the service when settings change (e.g., storageType changes)
-    setService(new DataService(settings));
-  }, [settings]);
+  const service = useMemo(() => new DataService(settings), [settings.storageType, settings.isMockMode, settings.googleSheets?.spreadsheetId, settings.mysqlHost, settings.mysqlDatabase, settings.postgresHost, settings.postgresDatabase]);
 
   return <DataContext.Provider value={service}>{children}</DataContext.Provider>;
 };

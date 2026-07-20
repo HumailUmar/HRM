@@ -1,7 +1,8 @@
 import { Employee, AttendanceRecord, PayrollRecord, LeaveRecord, Candidate, AppSettings } from '../../types';
-import { getToken } from '../../lib/auth';
+import { getAuthHeaders } from '../../lib/auth';
 import { LocalStorageAdapter } from '../LocalStorageAdapter';
 import { fetchWithRetry } from '../../lib/retry';
+import { logger } from '../../lib/logger';
 
 export class MySQLAdapter extends LocalStorageAdapter {
   private config: AppSettings | Record<string, unknown>;
@@ -12,7 +13,15 @@ export class MySQLAdapter extends LocalStorageAdapter {
   }
 
   private getHeaders() {
-    return { 'Content-Type': 'application/json' };
+    return getAuthHeaders('json');
+  }
+
+  private isAuthError(status: number): boolean {
+    return status === 401 || status === 403;
+  }
+
+  private isClientError(status: number): boolean {
+    return status >= 400 && status < 500;
   }
 
   async connect(): Promise<void> {
@@ -27,10 +36,18 @@ export class MySQLAdapter extends LocalStorageAdapter {
   async getEmployees(): Promise<Employee[]> {
     try {
       const res = await fetchWithRetry('/api/v1/employees', { headers: this.getHeaders(), credentials: 'same-origin' });
-      if (!res.ok) return super.getEmployees();
+      if (!res.ok) {
+        if (this.isAuthError(res.status)) {
+          logger.error('MySQLAdapter.getEmployees: auth failed', res.status);
+          throw new Error(`Auth failed: ${res.status}`);
+        }
+        return super.getEmployees();
+      }
       const data = await res.json();
       return data.data || [];
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Auth failed')) throw error;
+      logger.warn('MySQLAdapter.getEmployees: network error, falling back to local', error);
       return super.getEmployees();
     }
   }
@@ -38,10 +55,18 @@ export class MySQLAdapter extends LocalStorageAdapter {
   async getEmployee(id: string): Promise<Employee | null> {
     try {
       const res = await fetchWithRetry(`/api/v1/employees/${id}`, { headers: this.getHeaders(), credentials: 'same-origin' });
-      if (!res.ok) return super.getEmployee(id);
+      if (!res.ok) {
+        if (this.isAuthError(res.status)) {
+          logger.error('MySQLAdapter.getEmployee: auth failed', res.status);
+          throw new Error(`Auth failed: ${res.status}`);
+        }
+        return super.getEmployee(id);
+      }
       const data = await res.json();
       return data.data || null;
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Auth failed')) throw error;
+      logger.warn('MySQLAdapter.getEmployee: network error, falling back to local', error);
       return super.getEmployee(id);
     }
   }
@@ -57,10 +82,18 @@ export class MySQLAdapter extends LocalStorageAdapter {
         credentials: 'same-origin',
         body: JSON.stringify(employee),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        if (this.isAuthError(res.status)) {
+          logger.error('MySQLAdapter.saveEmployee: auth failed', res.status);
+          throw new Error(`Auth failed: ${res.status}`);
+        }
+        throw new Error(await res.text());
+      }
       const data = await res.json();
       return data.data || employee;
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Auth failed')) throw error;
+      logger.warn('MySQLAdapter.saveEmployee: network error, falling back to local', error);
       return super.saveEmployee(employee);
     }
   }
@@ -70,8 +103,18 @@ export class MySQLAdapter extends LocalStorageAdapter {
       if (!employees?.length) return;
       const results = await Promise.allSettled(employees.map((emp) => this.saveEmployee(emp)));
       const failed = results.filter((r) => r.status === 'rejected');
-      if (failed.length) throw new Error(`Failed to save ${failed.length}/${employees.length} employees`);
-    } catch {
+      if (failed.length) {
+        const errors = failed.map(r => (r as PromiseRejectedResult).reason?.message || 'Unknown');
+        const hasAuthError = errors.some(e => e.includes('Auth failed'));
+        if (hasAuthError) {
+          logger.error('MySQLAdapter.saveEmployees: auth failure in batch');
+          throw new Error('Auth failed in batch');
+        }
+        throw new Error(`Failed to save ${failed.length}/${employees.length} employees: ${errors.join(', ')}`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Auth failed')) throw error;
+      logger.warn('MySQLAdapter.saveEmployees: batch error, falling back to local', error);
       return super.saveEmployees(employees);
     }
   }
@@ -83,8 +126,16 @@ export class MySQLAdapter extends LocalStorageAdapter {
         headers: this.getHeaders(),
         credentials: 'same-origin',
       });
-      if (!res.ok) throw new Error(await res.text());
-    } catch {
+      if (!res.ok) {
+        if (this.isAuthError(res.status)) {
+          logger.error('MySQLAdapter.deleteEmployee: auth failed', res.status);
+          throw new Error(`Auth failed: ${res.status}`);
+        }
+        throw new Error(await res.text());
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Auth failed')) throw error;
+      logger.warn('MySQLAdapter.deleteEmployee: network error, falling back to local', error);
       return super.deleteEmployee(id);
     }
   }
