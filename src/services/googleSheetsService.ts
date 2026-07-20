@@ -1,8 +1,21 @@
 import { logger } from '../lib/logger';
 import { getAccessToken } from '../lib/auth';
 import { getSettings } from '../lib/storage';
+import { fetchWithRetry, CircuitBreakerConfig } from '../lib/retry';
 
 const SHEETS_TIMEOUT_MS = 30000;
+
+const SHEETS_CIRCUIT_BREAKER: CircuitBreakerConfig = {
+  failureThreshold: 5,
+  successThreshold: 2,
+  timeout: 30000,
+};
+
+const DRIVE_CIRCUIT_BREAKER: CircuitBreakerConfig = {
+  failureThreshold: 5,
+  successThreshold: 2,
+  timeout: 30000,
+};
 
 // Generic fetch with error handling, timeout, and Authorization header
 async function callSheetsApi(endpoint: string, method = 'GET', body?: any) {
@@ -19,27 +32,19 @@ async function callSheetsApi(endpoint: string, method = 'GET', body?: any) {
 
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}${endpoint}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SHEETS_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      throw new Error('Google Sheets request timed out after 30s');
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const response = await fetchWithRetry(url, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  }, {
+    maxRetries: 3,
+    baseDelay: 1000,
+    maxDelay: 30000,
+    circuitBreaker: SHEETS_CIRCUIT_BREAKER,
+  });
 
   if (!response.ok) {
     const errText = await response.text();
@@ -212,26 +217,18 @@ export async function uploadToDrive(fileName: string, mimeType: string, content:
   );
   form.append('file', content instanceof Blob ? content : new Blob([content], { type: mimeType }));
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SHEETS_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: form,
-      signal: controller.signal,
-    });
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      throw new Error('Google Drive upload timed out after 30s');
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const response = await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: form,
+  }, {
+    maxRetries: 3,
+    baseDelay: 1000,
+    maxDelay: 30000,
+    circuitBreaker: DRIVE_CIRCUIT_BREAKER,
+  });
 
   if (!response.ok) {
     const errText = await response.text();

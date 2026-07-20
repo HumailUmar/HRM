@@ -40,8 +40,8 @@ export class DataService {
   private settings: AppSettings;
   private adapterSignature: string;
 
-  constructor(settings?: AppSettings) {
-    this.settings = settings || getSettings();
+  constructor(settings: AppSettings) {
+    this.settings = settings;
     this.adapter = this.createAdapter(this.settings);
     this.adapterSignature = this.getAdapterSignature(this.settings);
   }
@@ -63,7 +63,12 @@ export class DataService {
   }
 
   private getResolvedSettings(): AppSettings {
-    return getSettings();
+    try {
+      return getSettings();
+    } catch (error) {
+      logger.error('Failed to resolve settings:', error);
+      return this.settings;
+    }
   }
 
   private getAdapter(): IDataAdapter {

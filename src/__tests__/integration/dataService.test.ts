@@ -1,5 +1,6 @@
 import { DataService } from '../../services/DataService';
 import { LocalStorageAdapter } from '../../services/adapters/LocalStorageAdapter';
+import { DEFAULT_SETTINGS } from '../../lib/mockData';
 
 jest.mock('../../services/adapters/LocalStorageAdapter');
 
@@ -12,7 +13,7 @@ describe('DataService', () => {
       getEmployees: jest.fn().mockResolvedValue(mockEmployees),
       saveEmployees: jest.fn().mockResolvedValue(undefined),
     }));
-    dataService = new DataService();
+    dataService = new DataService(DEFAULT_SETTINGS);
   });
 
   test('getEmployees returns data from adapter', async () => {

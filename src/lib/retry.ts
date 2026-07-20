@@ -126,7 +126,8 @@ function isRetryableError(error: Error, retryableErrors: string[] = ['timeout', 
 export async function fetchWithRetry(
   url: string,
   options: any = {},
-  retryOptions: RetryOptions = {}
+  retryOptions: RetryOptions = {},
+  signal?: AbortSignal
 ): Promise<Response> {
   if (!url || typeof url !== 'string') {
     throw new Error('fetchWithRetry: a valid URL is required');
@@ -158,6 +159,10 @@ export async function fetchWithRetry(
   let attempt = 0;
 
   while (attempt <= maxRetries) {
+    if (signal?.aborted) {
+      throw new Error('Aborted');
+    }
+    
     attempt++;
     
     try {
@@ -169,7 +174,7 @@ export async function fetchWithRetry(
         if (attempt <= maxRetries) {
           const delay = calculateBackoff(attempt, baseDelay, maxDelay);
           if (onRetry) onRetry(attempt, new Error(`HTTP ${response.status}`));
-          await sleep(delay);
+          await sleep(delay, signal);
           continue;
         }
         // Exhausted retries — treat as failure, not success.
@@ -184,6 +189,10 @@ export async function fetchWithRetry(
     } catch (error: any) {
       lastError = error;
       
+      if (signal?.aborted) {
+        throw new Error('Aborted');
+      }
+      
       // Check if error is retryable
       if (!isRetryableError(error, retryableErrors)) {
         // Non-retryable error – throw immediately
@@ -194,7 +203,7 @@ export async function fetchWithRetry(
       if (attempt <= maxRetries) {
         const delay = calculateBackoff(attempt, baseDelay, maxDelay);
         if (onRetry) onRetry(attempt, error);
-        await sleep(delay);
+        await sleep(delay, signal);
       } else {
         // Out of retries – record failure for circuit breaker
         if (circuitBreaker) recordFailure(circuitKey, circuitBreaker);
@@ -222,8 +231,19 @@ function calculateBackoff(attempt: number, baseDelay: number, maxDelay: number):
 /**
  * Sleep helper.
  */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Aborted'));
+      return;
+    }
+    const timeout = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(new Error('Aborted'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /**

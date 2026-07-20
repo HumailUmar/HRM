@@ -1,17 +1,29 @@
 import { logger } from '../../lib/logger';
 import { getAuthHeaders } from '../../lib/auth';
+import { fetchWithRetry, CircuitBreakerConfig } from '../../lib/retry';
 import { IBiometricAdapter } from './IBiometricAdapter';
 import { BiometricPunchRecord, BiometricTestResult, BiometricDeviceConfig } from '../../types';
+
+const BIOMETRIC_CIRCUIT_BREAKER: CircuitBreakerConfig = {
+  failureThreshold: 5,
+  successThreshold: 2,
+  timeout: 30000,
+};
 
 export class HikvisionAdapter implements IBiometricAdapter {
   private connected = false;
   private config: BiometricDeviceConfig | null = null;
 
   private async request<T>(endpoint: string, body: any): Promise<T> {
-    const response = await fetch(`/api/hikvision/${endpoint}`, {
+    const response = await fetchWithRetry(`/api/hikvision/${endpoint}`, {
       method: 'POST',
       headers: getAuthHeaders('json'),
       body: JSON.stringify(body)
+    }, {
+      maxRetries: 3,
+      baseDelay: 1000,
+      maxDelay: 30000,
+      circuitBreaker: BIOMETRIC_CIRCUIT_BREAKER,
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
