@@ -1,5 +1,14 @@
 // src/lib/offlineQueue.ts
 
+import { logger } from './logger';
+import { fetchWithRetry, CircuitBreakerConfig } from './retry';
+
+const OFFLINE_QUEUE_CIRCUIT_BREAKER: CircuitBreakerConfig = {
+  failureThreshold: 5,
+  successThreshold: 2,
+  timeout: 30000,
+};
+
 export interface QueuedRequest {
   id: string;
   endpoint: string;
@@ -45,7 +54,7 @@ export async function processQueue(): Promise<void> {
 
   for (const req of queue) {
     try {
-      const response = await fetch(req.endpoint, {
+      const response = await fetchWithRetry(req.endpoint, {
         method: req.method,
         credentials: 'same-origin',
         headers: {
@@ -53,9 +62,13 @@ export async function processQueue(): Promise<void> {
           'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify(req.body),
+      }, {
+        maxRetries: 2,
+        baseDelay: 1000,
+        maxDelay: 10000,
+        circuitBreaker: OFFLINE_QUEUE_CIRCUIT_BREAKER,
       });
       if (!response.ok) {
-        // If it's a 4xx (client error), don't retry; drop it and log.
         if (response.status >= 400 && response.status < 500) {
           console.warn(`Offline request failed (${response.status}), dropping:`, req);
           continue;

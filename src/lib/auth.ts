@@ -2,6 +2,13 @@ import { logger } from './logger';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { fetchWithRetry, CircuitBreakerConfig } from './retry';
+
+const AUTH_CIRCUIT_BREAKER: CircuitBreakerConfig = {
+  failureThreshold: 5,
+  successThreshold: 2,
+  timeout: 30000,
+};
 
 export const GOOGLE_WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -62,9 +69,14 @@ export function getAuthHeaders(contentType: 'json' | 'none' = 'json'): Record<st
 
 export async function verifySession(): Promise<AuthUser | null> {
   try {
-    const response = await fetch('/api/v1/auth/verify', {
+    const response = await fetchWithRetry('/api/v1/auth/verify', {
       headers: { ...getAuthHeaders('none') },
       credentials: 'same-origin',
+    }, {
+      maxRetries: 2,
+      baseDelay: 500,
+      maxDelay: 5000,
+      circuitBreaker: AUTH_CIRCUIT_BREAKER,
     });
 
     if (!response.ok) {
@@ -114,10 +126,15 @@ export const googleSignIn = async (): Promise<{ user: AuthUser; token: string } 
       throw new Error('Failed to extract Google ID Token');
     }
 
-    const response = await fetch('/api/v1/auth/google', {
+    const response = await fetchWithRetry('/api/v1/auth/google', {
       method: 'POST',
       headers: getAuthHeaders('json'),
       body: JSON.stringify({ idToken }),
+    }, {
+      maxRetries: 2,
+      baseDelay: 500,
+      maxDelay: 5000,
+      circuitBreaker: AUTH_CIRCUIT_BREAKER,
     });
 
     let responseBody: any = null;
@@ -158,10 +175,15 @@ export const logout = async () => {
   clearAuthData();
 
   try {
-    await fetch('/api/v1/auth/logout', {
+    await fetchWithRetry('/api/v1/auth/logout', {
       method: 'POST',
       headers: { ...getAuthHeaders('none') },
       credentials: 'same-origin',
+    }, {
+      maxRetries: 1,
+      baseDelay: 500,
+      maxDelay: 2000,
+      circuitBreaker: AUTH_CIRCUIT_BREAKER,
     });
   } catch {
     // Ignore logout transport errors.
