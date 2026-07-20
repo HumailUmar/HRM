@@ -209,11 +209,6 @@ export default function App() {
       if (result) {
         setAuthData(result.token, result.user);
         setUser(result.user);
-        setSettings(prev => {
-          const next = { ...prev, isMockMode: false };
-          persistSettings(next);
-          return next;
-        });
       }
     } catch (e) {
       logger.error("Sign in failed:", e);
@@ -222,29 +217,22 @@ export default function App() {
     }
   };
   const handleUpdateLeaveStatus = async (id: string, status: 'Approved' | 'Rejected', approver: string) => {
-    const updatedLeaves = leaves.map(l => {
-      if (l.id === id) {
-        return { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() };
-      }
-      return l;
+    setLeaves(prev => {
+      const updated = prev.map(l => {
+        if (l.id === id) return { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() };
+        return l;
+      });
+      // Persist asynchronously; on failure revert via the same functional update.
+      data.saveLeaves(updated).catch((error) => {
+        logger.error('Failed to update leave status:', error);
+        setLeaves(prev); // revert to last-known-good
+      });
+      return updated;
     });
-    const previousLeaves = leaves;
-    setLeaves(updatedLeaves);
-    try {
-      await data.saveLeaves(updatedLeaves);
-    } catch (error) {
-      logger.error('Failed to update leave status:', error);
-      setLeaves(previousLeaves);
-    }
   };
   const handleSignOut = async () => {
     await logout();
     setUser(null);
-    setSettings(prev => {
-      const next = { ...prev, isMockMode: true };
-      persistSettings(next);
-      return next;
-    });
   };
   const canAccess = (tab: string, role: string | undefined) => {
     // Default to 'Employee' if role is missing or undefined

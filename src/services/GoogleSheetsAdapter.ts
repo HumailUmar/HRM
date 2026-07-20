@@ -40,6 +40,21 @@ import {
 } from './googleSheetsService';
 import { LocalStorageAdapter } from './LocalStorageAdapter';
 import { logger } from '../lib/logger';
+import { getColumnLetter } from '../lib/columnUtils';
+
+/** Maps rows through a deserializer, isolating per-row failures. */
+function mapRowsSafe<T>(rows: any[][], deserialize: (row: any[]) => T): T[] {
+  if (!Array.isArray(rows)) return [];
+  const out: T[] = [];
+  for (const row of rows) {
+    try {
+      out.push(deserialize(row));
+    } catch (err) {
+      logger.error('mapRowsSafe: skipping malformed row:', err);
+    }
+  }
+  return out;
+}
 
 export class GoogleSheetsAdapter implements IDataAdapter {
   private spreadsheetId: string;
@@ -70,7 +85,7 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getEmployees(): Promise<Employee[]> {
     try {
       const rows = await readSheet('HumailEli_Employees', 'A2:CZ');
-      return rows.map(deserializeEmployee);
+      return mapRowsSafe(rows, deserializeEmployee);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
@@ -80,11 +95,15 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   }
 
   async saveEmployee(employee: Employee): Promise<Employee> {
-    const emps = await this.getEmployees();
-    const idx = emps.findIndex(e => e.id === employee.id);
-    if (idx >= 0) emps[idx] = employee;
-    else emps.push(employee);
-    await this.saveEmployees(emps);
+    // Row-level upsert to avoid read-modify-write race conditions.
+    const rowIndex = await findRowById('HumailEli_Employees', employee.id);
+    const serialized = serializeEmployee(employee);
+    if (rowIndex !== -1) {
+      const endCol = getColumnLetter(EMPLOYEE_HEADERS.length);
+      await updateSheet('HumailEli_Employees', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+    } else {
+      await appendToSheet('HumailEli_Employees', [serialized]);
+    }
     return employee;
   }
 
@@ -108,7 +127,7 @@ export class GoogleSheetsAdapter implements IDataAdapter {
     try {
       const sheetName = this.settings.googleSheets.attendanceSheet || 'HumailEli_Attendance';
       const rows = await readSheet(sheetName, 'A2:I');
-      return rows.map(deserializeAttendance);
+      return mapRowsSafe(rows, deserializeAttendance);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
@@ -126,11 +145,15 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   }
 
   async saveAttendanceRecord(record: AttendanceRecord): Promise<void> {
-    const recs = await this.getAttendance();
-    const idx = recs.findIndex(r => r.id === record.id);
-    if (idx >= 0) recs[idx] = record;
-    else recs.push(record);
-    await this.saveAttendance(recs);
+    const sheetName = this.settings.googleSheets.attendanceSheet || 'HumailEli_Attendance';
+    const rowIndex = await findRowById(sheetName, record.id);
+    const serialized = serializeAttendance(record);
+    if (rowIndex !== -1) {
+      const endCol = getColumnLetter(ATTENDANCE_HEADERS.length);
+      await updateSheet(sheetName, `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+    } else {
+      await appendToSheet(sheetName, [serialized]);
+    }
   }
 
   // ============================================================
@@ -140,7 +163,7 @@ export class GoogleSheetsAdapter implements IDataAdapter {
     try {
       const sheetName = this.settings.googleSheets.payrollSheet || 'HumailEli_Payroll';
       const rows = await readSheet(sheetName, 'A2:K');
-      return rows.map(deserializePayroll);
+      return mapRowsSafe(rows, deserializePayroll);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
@@ -164,7 +187,7 @@ export class GoogleSheetsAdapter implements IDataAdapter {
     try {
       const sheetName = this.settings.googleSheets.leaveSheet || 'HumailEli_Leaves';
       const rows = await readSheet(sheetName, 'A2:J');
-      return rows.map(deserializeLeave);
+      return mapRowsSafe(rows, deserializeLeave);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
@@ -174,11 +197,15 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   }
 
   async saveLeave(leave: LeaveRecord): Promise<void> {
-    const leaves = await this.getLeaves();
-    const idx = leaves.findIndex(l => l.id === leave.id);
-    if (idx >= 0) leaves[idx] = leave;
-    else leaves.push(leave);
-    await this.saveLeaves(leaves);
+    const sheetName = this.settings.googleSheets.leaveSheet || 'HumailEli_Leaves';
+    const rowIndex = await findRowById(sheetName, leave.id);
+    const serialized = serializeLeave(leave);
+    if (rowIndex !== -1) {
+      const endCol = getColumnLetter(LEAVES_HEADERS.length);
+      await updateSheet(sheetName, `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+    } else {
+      await appendToSheet(sheetName, [serialized]);
+    }
   }
 
   async saveLeaves(records: LeaveRecord[]): Promise<void> {
@@ -195,16 +222,19 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getCandidates(): Promise<Candidate[]> {
     try {
       const rows = await readSheet('HumailEli_Recruitment', 'A2:O');
-      return rows.map(deserializeCandidate);
+      return mapRowsSafe(rows, deserializeCandidate);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
   async saveCandidate(candidate: Candidate): Promise<void> {
-    const cands = await this.getCandidates();
-    const idx = cands.findIndex(c => c.id === candidate.id);
-    if (idx >= 0) cands[idx] = candidate;
-    else cands.push(candidate);
-    await this.saveCandidates(cands);
+    const rowIndex = await findRowById('HumailEli_Recruitment', candidate.id);
+    const serialized = serializeCandidate(candidate);
+    if (rowIndex !== -1) {
+      const endCol = getColumnLetter(RECRUITMENT_HEADERS.length);
+      await updateSheet('HumailEli_Recruitment', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+    } else {
+      await appendToSheet('HumailEli_Recruitment', [serialized]);
+    }
   }
 
   async saveCandidates(candidates: Candidate[]): Promise<void> {
@@ -220,16 +250,19 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getDepartments(): Promise<Department[]> {
     try {
       const rows = await readSheet('HumailEli_Departments', 'A2:N');
-      return rows.map(deserializeDepartment);
+      return mapRowsSafe(rows, deserializeDepartment);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
   async saveDepartment(department: Department): Promise<void> {
-    const depts = await this.getDepartments();
-    const idx = depts.findIndex(d => d.id === department.id);
-    if (idx >= 0) depts[idx] = department;
-    else depts.push(department);
-    await this.saveDepartments(depts);
+    const rowIndex = await findRowById('HumailEli_Departments', department.id);
+    const serialized = serializeDepartment(department);
+    if (rowIndex !== -1) {
+      const endCol = getColumnLetter(DEPARTMENT_HEADERS.length);
+      await updateSheet('HumailEli_Departments', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+    } else {
+      await appendToSheet('HumailEli_Departments', [serialized]);
+    }
   }
 
   async saveDepartments(depts: Department[]): Promise<void> {
@@ -242,16 +275,19 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getDesignations(): Promise<Designation[]> {
     try {
       const rows = await readSheet('HumailEli_Designations', 'A2:M');
-      return rows.map(deserializeDesignation);
+      return mapRowsSafe(rows, deserializeDesignation);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
   async saveDesignation(designation: Designation): Promise<void> {
-    const desigs = await this.getDesignations();
-    const idx = desigs.findIndex(d => d.id === designation.id);
-    if (idx >= 0) desigs[idx] = designation;
-    else desigs.push(designation);
-    await this.saveDesignations(desigs);
+    const rowIndex = await findRowById('HumailEli_Designations', designation.id);
+    const serialized = serializeDesignation(designation);
+    if (rowIndex !== -1) {
+      const endCol = getColumnLetter(DESIGNATION_HEADERS.length);
+      await updateSheet('HumailEli_Designations', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+    } else {
+      await appendToSheet('HumailEli_Designations', [serialized]);
+    }
   }
 
   async saveDesignations(designations: Designation[]): Promise<void> {
@@ -270,16 +306,19 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   async getDocuments(): Promise<EmployeeDocument[]> {
     try {
       const rows = await readSheet('HumailEli_Employee_Documents', 'A2:W');
-      return rows.map(deserializeEmployeeDocument);
+      return mapRowsSafe(rows, deserializeEmployeeDocument);
     } catch (e: any) { logger.warn('GoogleSheetsAdapter read failed, serving error:', e?.message); throw e; }
   }
 
   async saveDocument(document: EmployeeDocument): Promise<void> {
-    const docs = await this.getDocuments();
-    const idx = docs.findIndex(d => d.id === document.id);
-    if (idx >= 0) docs[idx] = document;
-    else docs.push(document);
-    await this.saveEmployeeDocuments(docs);
+    const rowIndex = await findRowById('HumailEli_Employee_Documents', document.id);
+    const serialized = serializeEmployeeDocument(document);
+    if (rowIndex !== -1) {
+      const endCol = getColumnLetter(DOCUMENTS_HEADERS.length);
+      await updateSheet('HumailEli_Employee_Documents', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+    } else {
+      await appendToSheet('HumailEli_Employee_Documents', [serialized]);
+    }
   }
 
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {

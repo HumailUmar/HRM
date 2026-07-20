@@ -242,75 +242,75 @@ export function serializeEmployee(emp: Employee): any[] {
     onboarding.tasksStatus ? JSON.stringify(onboarding.tasksStatus) : "{}",
     onboarding.tasksCompleted ? onboarding.tasksCompleted.join(",") : "",
     
-    // ===== PERSONAL INFORMATION =====
-    emp.personal.cnic || "",
-    emp.personal.cnicFrontImage || "",
-    emp.personal.cnicBackImage || "",
-    emp.personal.passportNumber || "",
-    emp.personal.passportExpiry || "",
-    emp.personal.nationality || "",
-    emp.personal.religion || "",
-    emp.personal.dateOfBirth || "",
-    emp.personal.gender || "",
-    emp.personal.maritalStatus || "",
-    emp.personal.bloodGroup || "",
-    emp.personal.personalEmail || "",
-    emp.personal.email || "",
-    emp.personal.phonePersonal || "",
-    emp.personal.phone || "",
-    emp.personal.currentAddress || "",
-    emp.personal.permanentAddress || "",
-    emp.personal.city || "",
-    emp.personal.state || "",
-    emp.personal.country || "",
-    emp.personal.postalCode || "",
-    emp.personal.emergencyContactName || "",
-    emp.personal.emergencyContactPhone || "",
-    emp.personal.emergencyContactRelationship || "",
-    emp.personal.linkedinUrl || "",
-    emp.personal.githubUrl || "",
-    emp.personal.otherSocialUrls || "",
-    emp.personal.profileImage || "",
-    emp.education ? JSON.stringify(emp.education) : "[]",
-    emp.certifications ? JSON.stringify(emp.certifications) : "[]",
-    emp.previousEmployers ? JSON.stringify(emp.previousEmployers) : "[]",
+    // ===== PERSONAL INFORMATION (safe access via local variable) =====
+    (personal as any).cnic || "",
+    (personal as any).cnicFrontImage || "",
+    (personal as any).cnicBackImage || "",
+    (personal as any).passportNumber || "",
+    (personal as any).passportExpiry || "",
+    (personal as any).nationality || "",
+    (personal as any).religion || "",
+    (personal as any).dateOfBirth || "",
+    (personal as any).gender || "",
+    (personal as any).maritalStatus || "",
+    (personal as any).bloodGroup || "",
+    (personal as any).personalEmail || "",
+    (personal as any).email || "",
+    (personal as any).phonePersonal || "",
+    (personal as any).phone || "",
+    (personal as any).currentAddress || "",
+    (personal as any).permanentAddress || "",
+    (personal as any).city || "",
+    (personal as any).state || "",
+    (personal as any).country || "",
+    (personal as any).postalCode || "",
+    (personal as any).emergencyContactName || "",
+    (personal as any).emergencyContactPhone || "",
+    (personal as any).emergencyContactRelationship || "",
+    (personal as any).linkedinUrl || "",
+    (personal as any).githubUrl || "",
+    (personal as any).otherSocialUrls || "",
+    (personal as any).profileImage || "",
+    (emp.education || []).length ? JSON.stringify(emp.education) : "[]",
+    (emp.certifications || []).length ? JSON.stringify(emp.certifications) : "[]",
+    (emp.previousEmployers || []).length ? JSON.stringify(emp.previousEmployers) : "[]",
 
-    // ===== EMPLOYMENT DETAILS =====
-    emp.employment.grade || "",
-    emp.employment.jobCategory || "",
-    emp.employment.employmentType || "",
-    emp.employment.contractStartDate || "",
-    emp.employment.contractEndDate || "",
-    emp.employment.isProbation ? "TRUE" : "FALSE",
-    emp.employment.probationEndDate || "",
-    emp.employment.confirmationDate || "",
-    emp.employment.workLocation || "",
-    emp.employment.shift || "",
-    emp.employment.costCenter || "",
-    emp.employment.reportingManagerId || "",
-    emp.employment.hrBusinessPartnerId || "",
-    emp.employment.payrollGroup || "",
-    emp.employment.departmentId || emp.department || "",
-    emp.employment.designationId || emp.role || "",
-    emp.employment.role || "",
-    emp.employment.punchCode || "",
-    emp.employment.leaveStartDate || "",
-    emp.employment.leaveEndDate || "",
-    emp.employment.leaveType || "",
-    emp.employment.suspensionStartDate || "",
-    emp.employment.suspensionEndDate || "",
-    emp.employment.suspensionReason || "",
-    emp.employment.resignationDate || "",
-    emp.employment.lastWorkingDate || "",
-    emp.employment.retirementDate || "",
-    emp.employment.terminationDate || "",
-    emp.employment.terminationReason || "",
+    // ===== EMPLOYMENT DETAILS (safe access via local variable) =====
+    (employment as any).grade || "",
+    (employment as any).jobCategory || "",
+    (employment as any).employmentType || "",
+    (employment as any).contractStartDate || "",
+    (employment as any).contractEndDate || "",
+    (employment as any).isProbation ? "TRUE" : "FALSE",
+    (employment as any).probationEndDate || "",
+    (employment as any).confirmationDate || "",
+    (employment as any).workLocation || "",
+    (employment as any).shift || "",
+    (employment as any).costCenter || "",
+    (employment as any).reportingManagerId || "",
+    (employment as any).hrBusinessPartnerId || "",
+    (employment as any).payrollGroup || "",
+    (employment as any).departmentId || emp.department || "",
+    (employment as any).designationId || emp.role || "",
+    (employment as any).role || "",
+    (employment as any).punchCode || "",
+    (employment as any).leaveStartDate || "",
+    (employment as any).leaveEndDate || "",
+    (employment as any).leaveType || "",
+    (employment as any).suspensionStartDate || "",
+    (employment as any).suspensionEndDate || "",
+    (employment as any).suspensionReason || "",
+    (employment as any).resignationDate || "",
+    (employment as any).lastWorkingDate || "",
+    (employment as any).retirementDate || "",
+    (employment as any).terminationDate || "",
+    (employment as any).terminationReason || "",
 
     // ===== COMPENSATION =====
-    emp.compensation.salaryStructure ? JSON.stringify(emp.compensation.salaryStructure) : (emp.baseSalary ? JSON.stringify({ totalMonthly: emp.baseSalary }) : ""),
-    emp.compensation.salaryHistory ? JSON.stringify(emp.compensation.salaryHistory) : "[]",
-    emp.compensation.payGradeId || "",
-    emp.compensation.currency || "USD"
+    emp.compensation?.salaryStructure ? JSON.stringify(emp.compensation.salaryStructure) : (emp.baseSalary ? JSON.stringify({ totalMonthly: emp.baseSalary }) : ""),
+    emp.compensation?.salaryHistory ? JSON.stringify(emp.compensation.salaryHistory) : "[]",
+    emp.compensation?.payGradeId || "",
+    emp.compensation?.currency || "USD"
   ];
 }
 
@@ -318,8 +318,9 @@ export function deserializeEmployee(row: any[]): Employee {
   const legacyRow = row || [];
 
   // Backward compatibility with legacy/simple row format used in some tests and imports:
-  // [id, name, email, phone, role]
-  if (legacyRow.length > 0 && legacyRow.length <= 5) {
+  // [id, name, email, phone, role] — only trigger when row is exactly 5 columns AND
+  // the row doesn't look like a serialized employee (which has exactly 5 identifiable header fields).
+  if (legacyRow.length === 5 && typeof legacyRow[4] === 'string' && !legacyRow[0]?.startsWith?.('EMP-')) {
     const [id = '', name = '', email = '', phone = '', role = ''] = legacyRow;
     return {
       id,
@@ -937,8 +938,16 @@ export const saveData = <T>(key: string, value: T): void => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(`humail_eli_${key}`, JSON.stringify(value));
-  } catch (error) {
-    logger.error(`Error saving key ${key}:`, error);
+  } catch (error: any) {
+    // Detect QuotaExceededError and surface a clear warning to the user.
+    if (error?.name === 'QuotaExceededError' || error?.code === 22 || (error?.message || '').toLowerCase().includes('quota')) {
+      logger.error(`localStorage quota exceeded when saving key ${key}. Data was NOT persisted.`);
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('hrm:storage-quota-exceeded', { detail: { key } }));
+      }
+    } else {
+      logger.error(`Error saving key ${key}:`, error);
+    }
   }
 };
 
@@ -956,7 +965,7 @@ export const addSheetLog = (sheetName: string, action: 'INSERT' | 'UPDATE' | 'DE
   try {
     const logs = loadData<SheetLog[]>('sheet_logs', []);
     const newLog: SheetLog = {
-      id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+      id: `LOG-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
       sheetName,
       timestamp: new Date().toISOString(),
       action,
@@ -2300,14 +2309,20 @@ export const generateEmployeeDiff = (
       const newVal = (newEmp as any)[field.key];
       
       if (oldVal !== newVal) {
+        // Preserve numeric zero values instead of converting them to empty strings.
+        const formatValue = (val: any): string => {
+          if (val === null || val === undefined) return '';
+          if (typeof val === 'number') return String(val);
+          return String(val);
+        };
         entries.push({
-          id: `HST-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `HST-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
           employeeId: newEmp.id,
           employeeName: newEmp.name,
           fieldName: field.key,
           fieldLabel: field.label,
-          oldValue: String(oldVal || ''),
-          newValue: String(newVal || ''),
+          oldValue: formatValue(oldVal),
+          newValue: formatValue(newVal),
           changedBy,
           changedByName,
           changedAt: new Date().toISOString(),
