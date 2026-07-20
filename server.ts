@@ -924,7 +924,16 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
 
-    const records = await getAttendanceFromDB();
+    let records: any[];
+    try {
+      records = await getAttendanceFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        records = getAttendanceFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     const newRecord = {
       id: `ATT-${Date.now()}`,
       ...validation.data,
@@ -932,7 +941,15 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
       updatedAt: new Date().toISOString()
     };
     records.push(newRecord);
-    await saveAttendanceToDB(records);
+    try {
+      await saveAttendanceToDB(records);
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        saveAttendanceToLocalStore(records);
+      } else {
+        throw dbError;
+      }
+    }
     res.status(201).json({ success: true, data: newRecord });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1724,11 +1741,16 @@ function isUrlSafe(urlString: string): boolean {
     const match = hostname.match(ipv4Regex);
     if (match) {
       const octets = match.slice(1, 5).map(Number);
-      // Block link-local / metadata style ranges, but allow RFC1918 LAN ranges
-      // because biometric devices commonly live on private networks.
-      if (octets[0] === 169 && octets[1] === 254) return false; // 169.254.0.0/16
+    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    const match = hostname.match(ipv4Regex);
+    if (match) {
+      const octets = match.slice(1, 5).map(Number);
+      if (octets[0] === 169 && octets[1] === 254) return false;
+      if (octets[0] === 10 || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31 ||
+          octets[0] === 192 && octets[1] === 168) {
+        console.warn(`isUrlSafe: allowing private IP ${hostname} — ensure intentional biometric device`);
+      }
     }
-    // Block IPv6 private ranges (simplified)
     if (hostname.startsWith('fe80:') || hostname.startsWith('fd00:') || hostname === '::1') return false;
     
     return true;

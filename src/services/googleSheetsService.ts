@@ -162,7 +162,13 @@ export async function deleteRow(sheetName: string, rowIndex: number): Promise<vo
 export async function ensureSheetExists(sheetName: string, headers: string[]): Promise<void> {
   try {
     await readSheet(sheetName, 'A1:A1');
-  } catch {
+  } catch (e: any) {
+    // Distinguish auth/rate-limit errors from genuinely missing sheets.
+    const msg = (e?.message || '').toLowerCase();
+    if (msg.includes('401') || msg.includes('403') || msg.includes('429') || msg.includes('quota')) {
+      logger.error(`ensureSheetExists: cannot access "${sheetName}" — auth or rate limit:`, e?.message);
+      return;
+    }
     logger.info(`Sheet "${sheetName}" not found. Creating it...`);
     try {
       const requestBody = {
@@ -177,9 +183,8 @@ export async function ensureSheetExists(sheetName: string, headers: string[]): P
         ],
       };
       await callSheetsApi(':batchUpdate', 'POST', requestBody);
-      // Wait slightly and write headers
       await updateSheet(sheetName, 'A1', [headers]);
-    } catch (err) {
+    } catch (err: any) {
       logger.error(`Failed to auto-create sheet "${sheetName}":`, err);
     }
   }

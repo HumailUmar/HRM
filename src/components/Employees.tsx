@@ -721,6 +721,11 @@ export default function Employees({
     });
 
     setEmployees(updated);
+    // Persist to backend after state update.
+    const targetEmp = updated.find(e => e.id === empId);
+    if (targetEmp) {
+      data.saveEmployee(targetEmp).catch(err => logger.error('Failed to persist onboarding toggle:', err));
+    }
   };
 
   // Submit Feedback modal
@@ -760,6 +765,11 @@ export default function Employees({
     });
 
     setEmployees(updated);
+    // Persist the employee feedback change to backend.
+    const targetEmp = updated.find(e => e.id === empId);
+    if (targetEmp) {
+      data.saveEmployee(targetEmp).catch(err => logger.error('Failed to persist training feedback:', err));
+    }
     setFeedbackTrainer('');
     setFeedbackRating(5);
     setFeedbackComments('');
@@ -888,6 +898,11 @@ export default function Employees({
       });
 
       setEmployees(updated);
+      // Persist the employee status change to backend.
+      const targetEmp = updated.find(e => e.id === employee.id);
+      if (targetEmp) {
+        data.saveEmployee(targetEmp).catch(err => logger.error('Failed to persist exit employee:', err));
+      }
       alert(`Exit formalities initiated for ${employee.name}. Check Settings → Exit Management for progress.`);
     } catch (err: any) {
       logger.error("Error initiating exit:", err);
@@ -921,6 +936,12 @@ export default function Employees({
 
     setEmployees(updatedEmployees);
     setSelectedEmployee(prev => prev ? { ...prev, journeyTimeline: updatedTimeline } : null);
+
+    // Persist to backend.
+    const targetEmp = updatedEmployees.find(emp => emp.id === selectedEmployee.id);
+    if (targetEmp) {
+      data.saveEmployee(targetEmp).catch(err => logger.error('Failed to persist timeline milestone:', err));
+    }
 
     // Sync to GSheet if not mock mode
     if (!isMockMode) {
@@ -1054,6 +1075,11 @@ export default function Employees({
     });
 
     setEmployees(updatedEmployees);
+    // Persist to backend.
+    const targetEmp = updatedEmployees.find(emp => emp.id === empId);
+    if (targetEmp) {
+      data.saveEmployee(targetEmp).catch(err => logger.error('Failed to persist template task status:', err));
+    }
   };
 
   const toggleOnboardingTaskComplete = async (taskId: string) => {
@@ -1148,6 +1174,14 @@ export default function Employees({
     }
     
     setIsMentorModalOpen(false);
+
+    // Persist all affected employees (mentee + mentors) to backend.
+    const affected = updatedEmployees.filter(e =>
+      e.id === selectedEmployee.id || e.id === mentorId || e.id === oldMentorId
+    );
+    affected.forEach(emp => {
+      data.saveEmployee(emp).catch(err => logger.error('Failed to persist mentor assignment:', err));
+    });
 
     // Automatically send an alert notification when assigned!
     if (mentorName) {
