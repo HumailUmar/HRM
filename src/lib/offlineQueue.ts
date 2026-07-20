@@ -1,5 +1,4 @@
 // src/lib/offlineQueue.ts
-import { getToken } from './auth';
 
 export interface QueuedRequest {
   id: string;
@@ -13,14 +12,17 @@ export interface QueuedRequest {
 const QUEUE_KEY = 'hrm_offline_queue';
 
 function getQueue(): QueuedRequest[] {
+  if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
 function saveQueue(queue: QueuedRequest[]): void {
+  if (typeof window === 'undefined') return;
   localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
@@ -39,18 +41,15 @@ export async function processQueue(): Promise<void> {
   const queue = getQueue();
   if (queue.length === 0) return;
 
-  const token = getToken();
-  if (!token) return; // wait for auth
-
   const remaining: QueuedRequest[] = [];
 
   for (const req of queue) {
     try {
       const response = await fetch(req.endpoint, {
         method: req.method,
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(req.body),
       });

@@ -213,9 +213,18 @@ const AttendanceSchema = z.object({
   checkIn: z.string().optional().default("09:00"),
   checkOut: z.string().optional().default("18:00"),
   status: z.enum(['Full Day', 'Half Day', 'Absent']).optional().default('Full Day'),
-  lateMinutes: z.number().optional().default(0),
-  earlyDepartureMinutes: z.number().optional().default(0),
+  lateMinutes: z.number().nonnegative().optional().default(0),
+  earlyDepartureMinutes: z.number().nonnegative().optional().default(0),
 });
+
+const NonEmptyRecordSchema = z.record(z.string(), z.any()).refine((value) => Object.keys(value).length > 0, {
+  message: 'Record cannot be empty',
+});
+const PayrollRecordSchema = NonEmptyRecordSchema;
+const CandidateSchema = NonEmptyRecordSchema;
+
+const bulkArraySchema = <T extends z.ZodTypeAny>(key: string, itemSchema: T) =>
+  z.object({ [key]: z.array(itemSchema).min(1, `${key} must contain at least one record`) });
 
 const LeaveSchema = z.object({
   employeeId: z.string().min(1, "Employee ID is required"),
@@ -224,6 +233,9 @@ const LeaveSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
   reason: z.string().optional().default(""),
+}).refine((leave) => !leave.startDate || !leave.endDate || leave.endDate >= leave.startDate, {
+  message: 'End date must be on or after start date',
+  path: ['endDate'],
 });
 
 const PayrollRunSchema = z.object({
@@ -267,6 +279,10 @@ async function fetchFromDevice(url: string, options: any = {}) {
     headers['Authorization'] = `Bearer ${apiKey}`;
   } else if (username || password) {
     headers['Authorization'] = buildDeviceAuthHeader(apiKey, username, password);
+  }
+
+  if (!isUrlSafe(url)) {
+    throw new Error('Host not allowed (internal IP blocked)');
   }
 
   return fetchWithRetry(url, {
@@ -694,7 +710,7 @@ app.post('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin']), asy
     const newId = await getNextId('employee', 'EMP-');
     const newEmployee = {
       id: newId,
-      ...req.body,
+      ...validation.data,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -702,7 +718,7 @@ app.post('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin']), asy
     await saveEmployeesStore(employees);
 
     // Create a default salary structure for the new employee
-    const defaultStructure = getSalaryStructureByEmployee(newEmployee.id, newEmployee.baseSalary || 0);
+    const defaultStructure = getSalaryStructureByEmployee(newEmployee.id, (newEmployee as any).baseSalary || 0);
     if (defaultStructure) {
       saveSalaryStructure(defaultStructure);
     }
@@ -723,12 +739,12 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
       return res.status(403).json({ error: 'Access denied. You can only update your own profile or must be HR/Admin.' });
     }
 
-    const validation = EmployeeSchema.partial().safeParse(req.body);
+    const validation = EmployeeSchema.partial().passthrough().safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
 
-    const updateData = isHRorAdmin ? { ...req.body } as any : { ...(validation.data as any) } as any;
+    const updateData = { ...(validation.data as any) } as any;
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ error: 'At least one permitted field is required' });
     }
@@ -801,7 +817,9 @@ app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Mana
 // PUT /api/v1/employees/bulk
 app.put('/api/v1/employees/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req: any, res: any) => {
   try {
-    const employees = Array.isArray(req.body?.employees) ? req.body.employees : [];
+    const validation = bulkArraySchema('employees', EmployeeSchema.partial().passthrough()).safeParse(req.body);
+    if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+    const employees = validation.data.employees;
     await saveEmployeesStore(employees);
     res.json({ success: true, count: employees.length });
   } catch (error: any) {
@@ -835,7 +853,9 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
 // PUT /api/v1/attendance/bulk
 app.put('/api/v1/attendance/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const records = Array.isArray((req as any).body?.records) ? (req as any).body.records : [];
+    const validation = bulkArraySchema('records', AttendanceSchema.passthrough()).safeParse((req as any).body);
+    if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+    const records = validation.data.records;
     await saveAttendanceToDB(records);
     res.json({ success: true, count: records.length });
   } catch (error: any) {
@@ -903,7 +923,9 @@ app.put('/api/v1/leaves/:id/approve', authenticateToken, authorize(['HR', 'Admin
 // PUT /api/v1/leaves/bulk
 app.put('/api/v1/leaves/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const leaves = Array.isArray((req as any).body?.leaves) ? (req as any).body.leaves : [];
+    const validation = bulkArraySchema('leaves', LeaveSchema.passthrough()).safeParse((req as any).body);
+    if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+    const leaves = validation.data.leaves;
     await saveLeavesToDB(leaves);
     res.json({ success: true, count: leaves.length });
   } catch (error: any) {
@@ -929,7 +951,10 @@ app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async 
 // POST /api/v1/payroll
 app.post('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const records = Array.isArray(req.body) ? req.body : [req.body];
+    const recordsInput = Array.isArray(req.body) ? req.body : [req.body];
+    const validation = z.array(PayrollRecordSchema).min(1, 'Payroll payload must contain at least one record').safeParse(recordsInput);
+    if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+    const records = validation.data;
     await savePayrollToDB(records);
     res.status(201).json({ success: true, count: records.length });
   } catch (error: any) {
@@ -940,7 +965,9 @@ app.post('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async
 // PUT /api/v1/payroll/bulk
 app.put('/api/v1/payroll/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const records = Array.isArray((req as any).body?.records) ? (req as any).body.records : [];
+    const validation = bulkArraySchema('records', PayrollRecordSchema).safeParse((req as any).body);
+    if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+    const records = validation.data.records;
     await savePayrollToDB(records);
     res.json({ success: true, count: records.length });
   } catch (error: any) {
@@ -1013,7 +1040,10 @@ app.get('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Mana
 
 app.post('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
-    const candidates = Array.isArray(req.body) ? req.body : [req.body];
+    const candidatesInput = Array.isArray(req.body) ? req.body : [req.body];
+    const validation = z.array(CandidateSchema).min(1, 'Candidate payload must contain at least one record').safeParse(candidatesInput);
+    if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+    const candidates = validation.data;
     await saveCandidatesToDB(candidates);
     res.status(201).json({ success: true, count: candidates.length });
   } catch (error: any) {
@@ -1023,7 +1053,9 @@ app.post('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Man
 
 app.put('/api/v1/candidates/bulk', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
-    const candidates = Array.isArray((req as any).body?.candidates) ? (req as any).body.candidates : [];
+    const validation = bulkArraySchema('candidates', CandidateSchema).safeParse((req as any).body);
+    if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+    const candidates = validation.data.candidates;
     await saveCandidatesToDB(candidates);
     res.json({ success: true, count: candidates.length });
   } catch (error: any) {
@@ -2564,17 +2596,18 @@ app.post('/api/zkteco/punches', authenticateToken, authorize(['Admin', 'HR']), a
     const { host, port, username, password, apiKey, startDate, endDate } = req.body;
     if (!host) return res.status(400).json({ success: false, error: 'Device host/IP is required' });
 
-    let url = `http://${host}:${port || 80}/api/attendance`;
-    const params = [];
-    if (startDate) params.push(`from=${startDate}`);
-    if (endDate) params.push(`to=${endDate}`);
-    if (params.length) url += `?${params.join('&')}`;
+    const url = new URL(`http://${host}:${port || 80}/api/attendance`);
+    if (startDate) url.searchParams.set('from', String(startDate));
+    if (endDate) url.searchParams.set('to', String(endDate));
 
-    const response = await fetchFromDevice(url, { username, password, apiKey });
+    const response = await fetchFromDevice(url.toString(), { username, password, apiKey });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
     const data = await response.json() as Record<string, any>;
     const list = data.data || data.records || data || [];
+    if (!Array.isArray(list)) {
+      return res.status(502).json({ success: false, error: 'Device returned a non-array punch payload' });
+    }
     const records = list.map((punch: any, index: number) => transformPunchRecord(punch, index, 'zkteco-device', 'ZKTeco Device'));
 
     res.json({ success: true, records, count: records.length });
@@ -3223,17 +3256,19 @@ app.post('/api/generic/punches', authenticateToken, authorize(['Admin', 'HR']), 
     const { host, port, apiKey, endpoint, headers, fieldMapping, startDate, endDate } = req.body;
     if (!host || !endpoint) return res.status(400).json({ success: false, error: 'Host and endpoint are required' });
 
-    let url = `http://${host}:${port || 80}${endpoint}`;
-    const params = [];
-    if (startDate && fieldMapping?.startDate) params.push(`${fieldMapping.startDate}=${startDate}`);
-    if (endDate && fieldMapping?.endDate) params.push(`${fieldMapping.endDate}=${endDate}`);
-    if (params.length) url += `?${params.join('&')}`;
+    const normalizedEndpoint = String(endpoint).startsWith('/') ? String(endpoint) : `/${endpoint}`;
+    const url = new URL(`http://${host}:${port || 80}${normalizedEndpoint}`);
+    if (startDate && fieldMapping?.startDate) url.searchParams.set(String(fieldMapping.startDate), String(startDate));
+    if (endDate && fieldMapping?.endDate) url.searchParams.set(String(fieldMapping.endDate), String(endDate));
 
-    const response = await fetchFromDevice(url, { apiKey, headers, timeout: DEFAULT_TIMEOUT_MS });
+    const response = await fetchFromDevice(url.toString(), { apiKey, headers, timeout: DEFAULT_TIMEOUT_MS });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const data = await response.json() as Record<string, any>;
     const list = data.data || data.records || data || [];
+    if (!Array.isArray(list)) {
+      return res.status(502).json({ success: false, error: 'Generic API returned a non-array punch payload' });
+    }
     const records = list.map((item: any, index: number) => {
       // Safely extract fields with fallbacks
       const id = item[fieldMapping?.id] || item.id || `GEN-${Date.now()}-${index}`;
@@ -3337,6 +3372,7 @@ app.post('/api/generic/users', authenticateToken, authorize(['Admin', 'HR']), as
 app.post('/api/generic/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers, employees } = req.body;
+    if (!Array.isArray(employees)) return res.status(400).json({ success: false, error: 'employees must be an array' });
     const rawUrl = `http://${host}:${port || 80}${endpoint || '/api/users/sync'}`;
     if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: 'Host not allowed (internal IP blocked)' });
     const url = rawUrl;

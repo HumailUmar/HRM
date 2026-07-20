@@ -8,13 +8,18 @@ const STORAGE_KEY = 'humail_eli_sync_tracker';
 
 export function getSyncTracker(): SyncTracker[] {
   if (typeof window === 'undefined') return [];
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export function saveSyncTracker(trackers: SyncTracker[]): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trackers));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(trackers) ? trackers : []));
 }
 
 export function getLastSync(module: string): string | null {
