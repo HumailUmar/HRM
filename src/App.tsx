@@ -246,7 +246,6 @@ export default function App() {
     setJobDescriptions([]);
   };
   const canAccess = (tab: string, role: string | undefined) => {
-    // Default to 'Employee' if role is missing or undefined
     const userRole = role || 'Employee';
     
     const permissions: Record<string, string[]> = {
@@ -272,10 +271,14 @@ export default function App() {
       'policies': ['Employee', 'Manager', 'HR', 'Admin'],
       'settings': ['Admin']
     };
+
+    if (!(tab in permissions)) {
+      logger.error(`canAccess: unknown tab "${tab}" requested by role "${userRole}". Please add it to the permissions map.`);
+      return false;
+    }
     
     const allowed = permissions[tab]?.includes(userRole) ?? false;
     
-    // Log a warning if role is missing, but allow fallback
     if (!role) {
       logger.warn(`canAccess: role is undefined for tab "${tab}", defaulting to "Employee". User:`, user);
     }
