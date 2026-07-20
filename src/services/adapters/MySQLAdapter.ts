@@ -1,6 +1,7 @@
 import { Employee, AttendanceRecord, PayrollRecord, LeaveRecord, Candidate, AppSettings } from '../../types';
 import { getToken } from '../../lib/auth';
 import { LocalStorageAdapter } from '../LocalStorageAdapter';
+import { fetchWithRetry } from '../../lib/retry';
 
 export class MySQLAdapter extends LocalStorageAdapter {
   private config: AppSettings | Record<string, unknown>;
@@ -14,15 +15,6 @@ export class MySQLAdapter extends LocalStorageAdapter {
     return { 'Content-Type': 'application/json' };
   }
 
-  private getFetchOptions(method?: string, body?: any): RequestInit {
-    return {
-      method,
-      headers: this.getHeaders(),
-      credentials: 'same-origin',
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    };
-  }
-
   async connect(): Promise<void> {
     // Connection and schema validation are handled on the server.
   }
@@ -34,7 +26,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
   // ---- EMPLOYEES ----
   async getEmployees(): Promise<Employee[]> {
     try {
-      const res = await fetch('/api/v1/employees', { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry('/api/v1/employees', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getEmployees();
       const data = await res.json();
       return data.data || [];
@@ -45,7 +37,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
 
   async getEmployee(id: string): Promise<Employee | null> {
     try {
-      const res = await fetch(`/api/v1/employees/${id}`, { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry(`/api/v1/employees/${id}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getEmployee(id);
       const data = await res.json();
       return data.data || null;
@@ -59,7 +51,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
       const isNew = !employee.id || employee.id.startsWith('EMP-TEMP');
       const url = isNew ? '/api/v1/employees' : `/api/v1/employees/${employee.id}`;
       const method = isNew ? 'POST' : 'PUT';
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         method,
         headers: this.getHeaders(),
         credentials: 'same-origin',
@@ -86,7 +78,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
 
   async deleteEmployee(id: string): Promise<void> {
     try {
-      const res = await fetch(`/api/v1/employees/${id}`, {
+      const res = await fetchWithRetry(`/api/v1/employees/${id}`, {
         method: 'DELETE',
         headers: this.getHeaders(),
         credentials: 'same-origin',
@@ -100,7 +92,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
   // ---- ATTENDANCE ----
   async getAttendance(): Promise<AttendanceRecord[]> {
     try {
-      const res = await fetch('/api/v1/attendance', { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry('/api/v1/attendance', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getAttendance();
       const data = await res.json();
       return data.data || [];
@@ -111,7 +103,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
 
   async getAttendanceByEmployee(employeeId: string): Promise<AttendanceRecord[]> {
     try {
-      const res = await fetch(`/api/v1/attendance?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry(`/api/v1/attendance?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getAttendanceByEmployee(employeeId);
       const data = await res.json();
       return data.data || [];
@@ -122,7 +114,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
 
   async saveAttendanceRecord(record: AttendanceRecord): Promise<void> {
     try {
-      const res = await fetch('/api/v1/attendance', {
+      const res = await fetchWithRetry('/api/v1/attendance', {
         method: 'POST',
         headers: this.getHeaders(),
         credentials: 'same-origin',
@@ -148,7 +140,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
   // ---- PAYROLL ----
   async getPayroll(): Promise<PayrollRecord[]> {
     try {
-      const res = await fetch('/api/v1/payroll', { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry('/api/v1/payroll', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getPayroll();
       const data = await res.json();
       return data.data || [];
@@ -159,7 +151,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
 
   async getPayrollByEmployee(employeeId: string): Promise<PayrollRecord[]> {
     try {
-      const res = await fetch(`/api/v1/payroll?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry(`/api/v1/payroll?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getPayrollByEmployee(employeeId);
       const data = await res.json();
       return data.data || [];
@@ -173,7 +165,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
       if (!records?.length) return;
       const results = await Promise.allSettled(
         records.map(async (rec) => {
-          const res = await fetch('/api/v1/payroll', {
+          const res = await fetchWithRetry('/api/v1/payroll', {
             method: 'POST',
             headers: this.getHeaders(),
             credentials: 'same-origin',
@@ -192,7 +184,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
   // ---- LEAVES ----
   async getLeaves(): Promise<LeaveRecord[]> {
     try {
-      const res = await fetch('/api/v1/leaves', { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry('/api/v1/leaves', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getLeaves();
       const data = await res.json();
       return data.data || [];
@@ -203,7 +195,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
 
   async getLeavesByEmployee(employeeId: string): Promise<LeaveRecord[]> {
     try {
-      const res = await fetch(`/api/v1/leaves?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry(`/api/v1/leaves?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getLeavesByEmployee(employeeId);
       const data = await res.json();
       return data.data || [];
@@ -217,7 +209,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
       const isNew = !leave.id || leave.id.startsWith('LR-TEMP');
       const url = isNew ? '/api/v1/leaves' : `/api/v1/leaves/${leave.id}/approve`;
       const method = isNew ? 'POST' : 'PUT';
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         method,
         headers: this.getHeaders(),
         credentials: 'same-origin',
@@ -243,7 +235,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
   // ---- CANDIDATES ----
   async getCandidates(): Promise<Candidate[]> {
     try {
-      const res = await fetch('/api/v1/candidates', { headers: this.getHeaders(), credentials: 'same-origin' });
+      const res = await fetchWithRetry('/api/v1/candidates', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getCandidates();
       const data = await res.json();
       return data.data || [];
@@ -254,7 +246,7 @@ export class MySQLAdapter extends LocalStorageAdapter {
 
   async saveCandidate(candidate: Candidate): Promise<void> {
     try {
-      const res = await fetch('/api/v1/candidates', {
+      const res = await fetchWithRetry('/api/v1/candidates', {
         method: 'POST',
         headers: this.getHeaders(),
         credentials: 'same-origin',
