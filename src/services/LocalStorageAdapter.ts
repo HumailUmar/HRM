@@ -50,6 +50,7 @@ import {
   getJDMatches,
   saveJDMatches,
 } from '../lib/storage';
+import { DEFAULT_SETTINGS } from '../lib/mockData';
 import {
   Employee,
   AttendanceRecord,
@@ -298,7 +299,8 @@ export class LocalStorageAdapter implements IDataAdapter {
 
   // SETTINGS
   async getSettings(): Promise<AppSettings> {
-    return getSettings();
+    const settings = getSettings();
+    return settings ?? DEFAULT_SETTINGS;
   }
 
   async saveSettings(settings: AppSettings): Promise<void> {

@@ -979,7 +979,7 @@ export const addSheetLog = (sheetName: string, action: 'INSERT' | 'UPDATE' | 'DE
 };
 
 // Synchronous Getters & Setters for UI state / Offline fallback / Mock mode
-export const getEmployees = (): Employee[] => loadData<Employee[]>('employees', INITIAL_EMPLOYEES);
+export const getEmployees = (): Employee[] => loadData<Employee[]>('employees', []);
 export const saveEmployees = (data: Employee[]) => {
   const withTimestamps = data.map(emp => ({
     ...emp,

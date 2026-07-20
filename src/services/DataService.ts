@@ -140,7 +140,7 @@ export class DataService {
     try {
       return this.validate('employee', data);
     } catch {
-      return data;
+      return null;
     }
   }
 
