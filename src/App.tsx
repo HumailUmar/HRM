@@ -217,22 +217,33 @@ export default function App() {
     }
   };
   const handleUpdateLeaveStatus = async (id: string, status: 'Approved' | 'Rejected', approver: string) => {
-    setLeaves(prev => {
-      const updated = prev.map(l => {
-        if (l.id === id) return { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() };
-        return l;
-      });
-      // Persist asynchronously; on failure revert via the same functional update.
-      data.saveLeaves(updated).catch((error) => {
-        logger.error('Failed to update leave status:', error);
-        setLeaves(prev); // revert to last-known-good
-      });
-      return updated;
+    // Snapshot the pre-update state for clean rollback in case of save failure.
+    const previousLeaves = leaves;
+    const updatedLeaves = leaves.map(l => {
+      if (l.id === id) return { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() };
+      return l;
     });
+    setLeaves(updatedLeaves);
+    try {
+      await data.saveLeaves(updatedLeaves);
+    } catch (error) {
+      logger.error('Failed to update leave status:', error);
+      setLeaves(previousLeaves); // roll back to pre-update state
+    }
   };
   const handleSignOut = async () => {
     await logout();
     setUser(null);
+    // Clear all data state to prevent leakage between user sessions.
+    setEmployees([]);
+    setAttendance([]);
+    setPayrolls([]);
+    setLeaves([]);
+    setCandidates([]);
+    setDocuments([]);
+    setOnboardingTasks([]);
+    setOnboardingTemplates([]);
+    setJobDescriptions([]);
   };
   const canAccess = (tab: string, role: string | undefined) => {
     // Default to 'Employee' if role is missing or undefined

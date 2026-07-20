@@ -90,8 +90,20 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   }
 
   async getEmployee(id: string): Promise<Employee | null> {
-    const emps = await this.getEmployees();
-    return emps.find(e => e.id === id) || null;
+    // Use findRowById + read the row directly instead of fetching all employees.
+    const rowIndex = await findRowById('HumailEli_Employees', id);
+    if (rowIndex === -1) return null;
+    const endCol = getColumnLetter(EMPLOYEE_HEADERS.length);
+    try {
+      const rows = await readSheet('HumailEli_Employees', `A${rowIndex}:${endCol}${rowIndex}`);
+      if (!rows || rows.length === 0 || !Array.isArray(rows[0])) return null;
+      const safeRows = mapRowsSafe(rows, deserializeEmployee);
+      return safeRows.length > 0 ? safeRows[0] : null;
+    } catch {
+      // Fall back to full scan if row-level read fails
+      const emps = await this.getEmployees();
+      return emps.find(e => e.id === id) || null;
+    }
   }
 
   async saveEmployee(employee: Employee): Promise<Employee> {
@@ -116,8 +128,16 @@ export class GoogleSheetsAdapter implements IDataAdapter {
   }
 
   async deleteEmployee(id: string): Promise<void> {
-    const emps = await this.getEmployees();
-    await this.saveEmployees(emps.filter(e => e.id !== id));
+    // Row-level operation: find the row and mark it as deleted via status cell,
+    // then truncate row contents so stale data doesn't persist.
+    const rowIndex = await findRowById('HumailEli_Employees', id);
+    if (rowIndex === -1) return;
+    const endCol = getColumnLetter(EMPLOYEE_HEADERS.length);
+    // Clear the row contents (keep headers in row 1 intact)
+    const emptyRow = Array(EMPLOYEE_HEADERS.length).fill('');
+    emptyRow[0] = id; // preserve ID for audit trail
+    emptyRow[5] = 'Deleted'; // status column at index 5
+    await updateSheet('HumailEli_Employees', `A${rowIndex}:${endCol}${rowIndex}`, [emptyRow]);
   }
 
   // ============================================================

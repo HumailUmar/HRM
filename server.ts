@@ -551,8 +551,8 @@ const validateApiKey = (req, res, next) => {
   next();
 };
 
-// JWT token generation
-app.post('/api/v1/auth/token', (req: any, res: any) => {
+// JWT token generation — also rate-limited to prevent brute force.
+app.post('/api/v1/auth/token', apiLimiter, (req: any, res: any) => {
   const { apiKey } = req.body;
   if (!apiKey || !apiKey.startsWith('he_')) {
     return res.status(401).json({ error: 'Invalid API key' });
@@ -871,7 +871,16 @@ app.delete('/api/v1/employees/:id', authenticateToken, authorize(['Admin']), asy
 app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, startDate, endDate } = req.query as Record<string, string | undefined>;
-    let records = await getAttendanceFromDB();
+    let records: any[];
+    try {
+      records = await getAttendanceFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        records = getAttendanceFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     if (employeeId) records = records.filter(r => r.employeeId === employeeId);
     if (startDate) records = records.filter(r => r.date >= startDate);
     if (endDate) records = records.filter(r => r.date <= endDate);
@@ -949,7 +958,16 @@ app.put('/api/v1/attendance/bulk', authenticateToken, authorize(['HR', 'Admin'])
 app.get('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, status } = req.query as Record<string, string | undefined>;
-    let leaves = await getLeavesFromDB();
+    let leaves: any[];
+    try {
+      leaves = await getLeavesFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        leaves = getLeavesFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     if (employeeId) leaves = leaves.filter(l => l.employeeId === employeeId);
     if (status) leaves = leaves.filter(l => l.status === status);
     res.json({ success: true, data: leaves, count: leaves.length });
@@ -1019,7 +1037,16 @@ app.put('/api/v1/leaves/bulk', authenticateToken, authorize(['HR', 'Admin']), as
 app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const { employeeId, month } = req.query as Record<string, string | undefined>;
-    let payroll = await getPayrollFromDB();
+    let payroll: any[];
+    try {
+      payroll = await getPayrollFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        payroll = getPayrollFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     if (employeeId) payroll = payroll.filter(p => p.employeeId === employeeId);
     if (month) payroll = payroll.filter(p => p.month === month);
     res.json({ success: true, data: payroll, count: payroll.length });
@@ -1113,7 +1140,16 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
 
 app.get('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
-    const candidates = await getCandidatesFromDB();
+    let candidates: any[];
+    try {
+      candidates = await getCandidatesFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        candidates = getCandidatesFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     res.json({ success: true, data: candidates, count: candidates.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

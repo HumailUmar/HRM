@@ -1385,7 +1385,9 @@ export async function syncModuleIncremental<T extends { id: string; name?: strin
       const rows = records.map(serializer);
       // We need to know the headers. We'll try to read them or assume they are there.
       const currentHeaders = await readSheet(sheetName, '1:1');
-      await updateSheet(sheetName, 'A1', [currentHeaders[0] || [], ...rows]);
+      const headersRow = (currentHeaders && currentHeaders.length > 0 && Array.isArray(currentHeaders[0]))
+        ? currentHeaders[0] : [];
+      await updateSheet(sheetName, 'A1', [headersRow, ...rows]);
       addSheetLog(sheetName, 'SYNC', { count: records.length, action: 'OVERWRITE' });
       updateSyncTracker(moduleName, records.length);
       savePreviousSyncIds(moduleName, records.map(r => r.id));
@@ -1471,7 +1473,7 @@ export async function syncAllEmployeesToGSheet(employees: Employee[], forceOverw
     settings.googleSheets.employeeSheet || 'HumailEli_Employees',
     employees,
     serializeEmployee,
-    8, // status column index in EMPLOYEE_HEADERS
+    5, // status column index in EMPLOYEE_HEADERS (index 5 = 'status')
     forceOverwrite
   );
 }
@@ -1498,7 +1500,7 @@ export async function syncAttendanceToGSheet(records: AttendanceRecord[], forceO
   const settings = getSettings();
   await syncModuleIncremental<AttendanceRecord>(
     'attendance',
-    settings.googleSheets.attendanceSheet,
+    settings.googleSheets.attendanceSheet || 'HumailEli_Attendance',
     records,
     serializeAttendance,
     8, // status column index in ATTENDANCE_HEADERS
@@ -1528,7 +1530,7 @@ export async function syncPayrollToGSheet(records: PayrollRecord[], forceOverwri
   const settings = getSettings();
   await syncModuleIncremental<PayrollRecord>(
     'payroll',
-    settings.googleSheets.payrollSheet,
+    settings.googleSheets.payrollSheet || 'HumailEli_Payroll',
     records,
     serializePayroll,
     9, // status column index in PAYROLL_HEADERS
@@ -1573,7 +1575,7 @@ export async function syncAllLeavesToGSheet(records: LeaveRecord[], forceOverwri
   const settings = getSettings();
   await syncModuleIncremental<LeaveRecord>(
     'leaves',
-    settings.googleSheets.leaveSheet,
+    settings.googleSheets.leaveSheet || 'HumailEli_Leaves',
     records,
     serializeLeave,
     7, // status column index in LEAVES_HEADERS
@@ -1977,7 +1979,7 @@ export async function fetchOrgChartFromGSheet(): Promise<OrgChartNode[]> {
   try {
     const rows = await readSheet('HumailEli_Org_Chart', 'A2:H');
     if (!rows || rows.length === 0) return [];
-    const nodes = rows.map(deserializeOrgChart);
+    const nodes = mapRowsSafe(rows, deserializeOrgChart, 'orgChart');
     return nodes.map(node => ({
       ...node,
       children: nodes.filter(n => n.parentId === node.id).map(n => n.id)
@@ -2263,7 +2265,7 @@ export const generateEmployeeDiff = (
   
   if (!oldEmp && changeType === 'CREATE') {
     entries.push({
-      id: `HST-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `HST-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       employeeId: newEmp.id,
       employeeName: newEmp.name,
       fieldName: 'all',
@@ -2395,7 +2397,7 @@ export function deserializeExitRecord(row: any[]): ExitRecord {
     reason: data.reason || undefined,
     notes: data.notes || undefined,
     completedAt: data.completedAt || undefined,
-    createdAt: data.updatedAt || "",
+    createdAt: data.createdAt || data.initiatedAt || "",
     updatedAt: data.updatedAt || ""
   };
 }
