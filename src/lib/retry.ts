@@ -16,6 +16,8 @@ export interface CircuitBreakerConfig {
   timeout: number; // milliseconds to wait before trying again
 }
 
+import { incrementCircuitBreakerOpen, incrementCircuitBreakerClosed } from './metrics';
+
 export interface CircuitState {
   failures: number;
   lastFailureTime: number;
@@ -75,6 +77,7 @@ function recordSuccess(key: string, config?: CircuitBreakerConfig): void {
       state.successInHalfOpen = 0;
       state.halfOpenProbeInFlight = false;
       state.state = 'CLOSED';
+      incrementCircuitBreakerClosed();
     } else {
       state.halfOpenProbeInFlight = false;
     }
@@ -84,6 +87,7 @@ function recordSuccess(key: string, config?: CircuitBreakerConfig): void {
   state.failures = 0;
   state.halfOpenProbeInFlight = false;
   state.state = 'CLOSED';
+  incrementCircuitBreakerClosed();
 }
 
 function recordFailure(key: string, config?: CircuitBreakerConfig): void {
@@ -95,6 +99,7 @@ function recordFailure(key: string, config?: CircuitBreakerConfig): void {
     state.lastFailureTime = Date.now();
     state.successInHalfOpen = 0;
     state.halfOpenProbeInFlight = false;
+    incrementCircuitBreakerOpen();
     return;
   }
   state.failures++;
@@ -103,6 +108,7 @@ function recordFailure(key: string, config?: CircuitBreakerConfig): void {
   if (state.failures >= config.failureThreshold) {
     state.state = 'OPEN';
     state.halfOpenProbeInFlight = false;
+    incrementCircuitBreakerOpen();
   }
 }
 

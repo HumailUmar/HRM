@@ -164,6 +164,10 @@ export class DataService {
   }
 
   async getEmployee(id: string): Promise<Employee | null> {
+    if (!id) {
+      logger.warn('DataService.getEmployee called with empty id');
+      return null;
+    }
     const data = await this.getAdapter().getEmployee(id);
     if (!data) return null;
     try {
@@ -174,6 +178,9 @@ export class DataService {
   }
 
   async saveEmployee(employee: Employee): Promise<Employee> {
+    if (!employee) {
+      throw new Error('DataService.saveEmployee called with null/undefined employee');
+    }
     if (this.isOffline()) {
       enqueueRequest({
         endpoint: `/api/v1/employees/${employee.id}`,
@@ -223,10 +230,15 @@ export class DataService {
   }
 
   async getAttendanceByEmployee(employeeId: string): Promise<AttendanceRecord[]> {
+    if (!employeeId) {
+      logger.warn('DataService.getAttendanceByEmployee called with empty employeeId');
+      return [];
+    }
     return this.validateArray('attendance', await this.getAdapter().getAttendanceByEmployee(employeeId));
   }
 
   async saveAttendance(records: AttendanceRecord[]): Promise<void> {
+    if (!records?.length) return;
     if (this.isOffline()) {
       enqueueRequest({
         endpoint: '/api/v1/attendance/bulk',
@@ -248,14 +260,22 @@ export class DataService {
   }
 
   async getLeavesByEmployee(employeeId: string): Promise<LeaveRecord[]> {
+    if (!employeeId) {
+      logger.warn('DataService.getLeavesByEmployee called with empty employeeId');
+      return [];
+    }
     return this.validateArray('leave', await this.getAdapter().getLeavesByEmployee(employeeId));
   }
 
   async saveLeave(leave: LeaveRecord): Promise<void> {
+    if (!leave) {
+      throw new Error('DataService.saveLeave called with null/undefined leave');
+    }
     return this.getAdapter().saveLeave(this.validate('leave', leave));
   }
 
   async saveLeaves(leaves: LeaveRecord[]): Promise<void> {
+    if (!leaves?.length) return;
     if (this.isOffline()) {
       enqueueRequest({
         endpoint: '/api/v1/leaves/bulk',
@@ -273,10 +293,15 @@ export class DataService {
   }
 
   async getPayrollByEmployee(employeeId: string): Promise<PayrollRecord[]> {
+    if (!employeeId) {
+      logger.warn('DataService.getPayrollByEmployee called with empty employeeId');
+      return [];
+    }
     return this.validateArray('payroll', await this.getAdapter().getPayrollByEmployee(employeeId));
   }
 
   async savePayroll(records: PayrollRecord[]): Promise<void> {
+    if (!records?.length) return;
     if (this.isOffline()) {
       enqueueRequest({
         endpoint: '/api/v1/payroll/bulk',
@@ -401,6 +426,9 @@ export class DataService {
   }
 
   async saveDocument(document: EmployeeDocument): Promise<void> {
+    if (!document) {
+      throw new Error('DataService.saveDocument called with null/undefined document');
+    }
     return this.getAdapter().saveDocument(this.validate('document', document));
   }
 
@@ -409,10 +437,15 @@ export class DataService {
   }
 
   async getEmployeeDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]> {
+    if (!employeeId) {
+      logger.warn('DataService.getEmployeeDocumentsByEmployee called with empty employeeId');
+      return [];
+    }
     return this.validateArray('document', await this.getAdapter().getEmployeeDocumentsByEmployee(employeeId));
   }
 
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
+    if (!docs?.length) return;
     return this.getAdapter().saveEmployeeDocuments(this.validateArray('document', docs));
   }
 

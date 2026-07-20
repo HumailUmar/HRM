@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { fetchWithRetry, CircuitBreakerConfig } from './retry';
+import { incrementAuthSuccess, incrementAuthFailure } from './metrics';
 
 const AUTH_CIRCUIT_BREAKER: CircuitBreakerConfig = {
   failureThreshold: 5,
@@ -81,6 +82,7 @@ export async function verifySession(): Promise<AuthUser | null> {
 
     if (!response.ok) {
       clearAuthData();
+      incrementAuthFailure();
       return null;
     }
 
@@ -88,13 +90,16 @@ export async function verifySession(): Promise<AuthUser | null> {
     const user = payload?.user || getUser();
     if (!user) {
       clearAuthData();
+      incrementAuthFailure();
       return null;
     }
 
     currentUser = user as AuthUser;
+    incrementAuthSuccess();
     return currentUser;
   } catch (error) {
     logger.warn('Session verification failed:', error);
+    incrementAuthFailure();
     return getUser();
   }
 }
@@ -154,10 +159,12 @@ export const googleSignIn = async (): Promise<{ user: AuthUser; token: string } 
     }
 
     setAuthData('', user, googleAccessToken);
+    incrementAuthSuccess();
     return { token: '', user };
   } catch (error) {
     logger.error('Google sign in failure:', error);
     clearAuthData();
+    incrementAuthFailure();
     return null;
   }
 };

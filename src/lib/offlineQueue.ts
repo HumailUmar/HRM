@@ -2,6 +2,7 @@
 
 import { logger } from './logger';
 import { fetchWithRetry, CircuitBreakerConfig } from './retry';
+import { incrementOfflineQueueEnqueued, incrementOfflineQueueProcessed, incrementOfflineQueueFailed } from './metrics';
 
 const OFFLINE_QUEUE_CIRCUIT_BREAKER: CircuitBreakerConfig = {
   failureThreshold: 5,
@@ -44,6 +45,7 @@ export function enqueueRequest(request: Omit<QueuedRequest, 'id' | 'timestamp' |
     retries: 0,
   });
   saveQueue(queue);
+  incrementOfflineQueueEnqueued();
 }
 
 export async function processQueue(): Promise<void> {
@@ -71,10 +73,12 @@ export async function processQueue(): Promise<void> {
       if (!response.ok) {
         if (response.status >= 400 && response.status < 500) {
           console.warn(`Offline request failed (${response.status}), dropping:`, req);
+          incrementOfflineQueueFailed();
           continue;
         }
         throw new Error(`HTTP ${response.status}`);
       }
+      incrementOfflineQueueProcessed();
       // Success: don't add to remaining
     } catch (error) {
       // If retries < 3, keep it; else drop it.
@@ -82,6 +86,7 @@ export async function processQueue(): Promise<void> {
         remaining.push({ ...req, retries: req.retries + 1 });
       } else {
         console.error('Offline request failed permanently:', req, error);
+        incrementOfflineQueueFailed();
       }
     }
   }
