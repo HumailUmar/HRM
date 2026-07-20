@@ -106,6 +106,9 @@ export class DataService {
   }
 
   private validateArray<T>(entity: EntityType, data: T[]): T[] {
+    if (!Array.isArray(data)) {
+      throw new Error(`Validation failed for ${entity}: expected an array, received ${data === null ? 'null' : typeof data}`);
+    }
     if (this.shouldSkipValidation()) return data;
     return data.map((item) => this.validate(entity, item));
   }
@@ -141,7 +144,7 @@ export class DataService {
       enqueueRequest({
         endpoint: `/api/v1/employees/${employee.id}`,
         method: 'PUT',
-        body: { employee },
+        body: employee,
       });
       return this.validate('employee', employee);
     }

@@ -214,19 +214,22 @@ export function parseJson(value: any, defaultValue: any = undefined): any {
 
 // Serializers
 export function serializeEmployee(emp: Employee): any[] {
+  const personal = emp.personal || ({} as Employee['personal']);
+  const employment = emp.employment || ({} as Employee['employment']);
+  const onboarding = emp.onboarding || ({} as Employee['onboarding']);
   return [
     emp.id || "",
-    emp.personal.name || emp.name || "",
-    emp.personal.email || emp.email || "",
-    emp.personal.phone || "",
-    emp.employment.joiningDate || "",
-    emp.employment.status || emp.status || "Active",
-    emp.employment.seatNumber || 0,
-    emp.onboarding.contractSigned ? "TRUE" : "FALSE",
-    emp.onboarding.trainingAssigned ? "TRUE" : "FALSE",
-    emp.onboarding.trainingCompleted ? "TRUE" : "FALSE",
-    emp.onboarding.welcomeEmailSent ? "TRUE" : "FALSE",
-    emp.onboarding.feedbackSubmitted ? "TRUE" : "FALSE",
+    personal.name || emp.name || "",
+    personal.email || emp.email || "",
+    personal.phone || "",
+    employment.joiningDate || "",
+    employment.status || emp.status || "Active",
+    employment.seatNumber || 0,
+    onboarding.contractSigned ? "TRUE" : "FALSE",
+    onboarding.trainingAssigned ? "TRUE" : "FALSE",
+    onboarding.trainingCompleted ? "TRUE" : "FALSE",
+    onboarding.welcomeEmailSent ? "TRUE" : "FALSE",
+    onboarding.feedbackSubmitted ? "TRUE" : "FALSE",
     emp.exit?.resignationAccepted ? "TRUE" : "FALSE",
     emp.exit?.assetHandover ? "TRUE" : "FALSE",
     emp.exit?.ndaRenewed ? "TRUE" : "FALSE",
@@ -235,9 +238,9 @@ export function serializeEmployee(emp: Employee): any[] {
     emp.mentorId || "",
     emp.mentorName || "",
     emp.journeyTimeline ? JSON.stringify(emp.journeyTimeline) : "",
-    emp.onboarding.templateId || "",
-    emp.onboarding.tasksStatus ? JSON.stringify(emp.onboarding.tasksStatus) : "{}",
-    emp.onboarding.tasksCompleted ? emp.onboarding.tasksCompleted.join(",") : "",
+    onboarding.templateId || "",
+    onboarding.tasksStatus ? JSON.stringify(onboarding.tasksStatus) : "{}",
+    onboarding.tasksCompleted ? onboarding.tasksCompleted.join(",") : "",
     
     // ===== PERSONAL INFORMATION =====
     emp.personal.cnic || "",
@@ -2537,9 +2540,15 @@ export function clearPreviousSyncIds(moduleName: string): void {
 
 export function getPreviousSyncIds(moduleName: string): string[] {
   if (typeof window === 'undefined') return [];
-  const key = `humail_eli_sync_ids_${moduleName}`;
-  const raw = localStorage.getItem(key);
-  return raw ? JSON.parse(raw) : [];
+  try {
+    const key = `humail_eli_sync_ids_${moduleName}`;
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch (error) {
+    logger.error(`Error loading previous sync IDs for ${moduleName}:`, error);
+    return [];
+  }
 }
 
 export function savePreviousSyncIds(moduleName: string, ids: string[]): void {

@@ -122,7 +122,7 @@ export default function App() {
   useEffect(() => {
     const loadAll = async () => {
       try {
-        const [emps, att, pay, levs, depts, desigs, docs, tasks, tmpls, jobs, cands] = await Promise.all([
+        const results = await Promise.allSettled([
           data.getEmployees(),
           data.getAttendance(),
           data.getPayroll(),
@@ -134,18 +134,25 @@ export default function App() {
           data.getOnboardingTemplates(),
           data.getJobDescriptions(),
           data.getCandidates(),
-        ]);
-        setEmployees(emps);
-        setAttendance(att);
-        setPayrolls(pay);
-        setLeaves(levs);
-        setDepartments(depts);
-        setDesignations(desigs);
-        setDocuments(docs);
-        setOnboardingTasks(tasks);
-        setOnboardingTemplates(tmpls);
-        setJobDescriptions(jobs);
-        setCandidates(cands);
+        ] as const);
+        const logRejected = (label: string, result: PromiseSettledResult<unknown>) => {
+          if (result.status === 'rejected') logger.error(`Failed to load ${label}:`, result.reason);
+        };
+        const applyResult = <T,>(label: string, result: PromiseSettledResult<T>, setter: (value: T) => void) => {
+          if (result.status === 'fulfilled') setter(result.value);
+          else logRejected(label, result);
+        };
+        applyResult('employees', results[0], setEmployees);
+        applyResult('attendance', results[1], setAttendance);
+        applyResult('payroll', results[2], setPayrolls);
+        applyResult('leaves', results[3], setLeaves);
+        applyResult('departments', results[4], setDepartments);
+        applyResult('designations', results[5], setDesignations);
+        applyResult('documents', results[6], setDocuments);
+        applyResult('onboarding tasks', results[7], setOnboardingTasks);
+        applyResult('onboarding templates', results[8], setOnboardingTemplates);
+        applyResult('job descriptions', results[9], setJobDescriptions);
+        applyResult('candidates', results[10], setCandidates);
       } catch (error) {
         logger.error("Failed to load initial data:", error);
       }
@@ -157,8 +164,7 @@ export default function App() {
     setIsLoadingGSheet(true);
     try {
       await data.syncAll();
-      // Re-load all data after sync to ensure consistency
-      const [emps, att, pay, levs, depts, desigs, docs, tasks, tmpls, jobs, cands] = await Promise.all([
+      const results = await Promise.allSettled([
         data.getEmployees(),
         data.getAttendance(),
         data.getPayroll(),
@@ -170,18 +176,25 @@ export default function App() {
         data.getOnboardingTemplates(),
         data.getJobDescriptions(),
         data.getCandidates(),
-      ]);
-      setEmployees(emps);
-      setAttendance(att);
-      setPayrolls(pay);
-      setLeaves(levs);
-      setDepartments(depts);
-      setDesignations(desigs);
-      setDocuments(docs);
-      setOnboardingTasks(tasks);
-      setOnboardingTemplates(tmpls);
-      setJobDescriptions(jobs);
-      setCandidates(cands);
+      ] as const);
+      const logRejected = (label: string, result: PromiseSettledResult<unknown>) => {
+        if (result.status === 'rejected') logger.error(`Failed to refresh ${label} after sync:`, result.reason);
+      };
+      const applyResult = <T,>(label: string, result: PromiseSettledResult<T>, setter: (value: T) => void) => {
+        if (result.status === 'fulfilled') setter(result.value);
+        else logRejected(label, result);
+      };
+      applyResult('employees', results[0], setEmployees);
+      applyResult('attendance', results[1], setAttendance);
+      applyResult('payroll', results[2], setPayrolls);
+      applyResult('leaves', results[3], setLeaves);
+      applyResult('departments', results[4], setDepartments);
+      applyResult('designations', results[5], setDesignations);
+      applyResult('documents', results[6], setDocuments);
+      applyResult('onboarding tasks', results[7], setOnboardingTasks);
+      applyResult('onboarding templates', results[8], setOnboardingTemplates);
+      applyResult('job descriptions', results[9], setJobDescriptions);
+      applyResult('candidates', results[10], setCandidates);
     } catch (error) {
       logger.error("Manual sync failed:", error);
     } finally {
@@ -215,8 +228,14 @@ export default function App() {
       }
       return l;
     });
+    const previousLeaves = leaves;
     setLeaves(updatedLeaves);
-    await data.saveLeaves(updatedLeaves);
+    try {
+      await data.saveLeaves(updatedLeaves);
+    } catch (error) {
+      logger.error('Failed to update leave status:', error);
+      setLeaves(previousLeaves);
+    }
   };
   const handleSignOut = async () => {
     await logout();
