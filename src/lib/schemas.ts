@@ -70,7 +70,7 @@ export const LeaveSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.string().optional(),
-  status: z.enum(['Pending', 'Approved', 'Rejected']).default('Pending'),
+  status: z.enum(['Pending', 'Approved', 'Rejected', 'Cancelled']).default('Pending'),
   approvedBy: z.string().optional(),
   approvedAt: z.string().optional(),
   createdAt: z.string().optional(),

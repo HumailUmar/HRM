@@ -50,6 +50,7 @@ export async function processQueue(): Promise<void> {
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify(req.body),
       });
@@ -75,10 +76,14 @@ export async function processQueue(): Promise<void> {
   saveQueue(remaining);
 }
 
-// Listen for online events
+let queueProcessing = false;
+
+// Listen for online events – debounce to prevent thundering herd on reconnect.
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
+    if (queueProcessing) return;
     console.log('🔄 Online detected, processing offline queue...');
-    processQueue();
+    queueProcessing = true;
+    processQueue().finally(() => { queueProcessing = false; });
   });
 }

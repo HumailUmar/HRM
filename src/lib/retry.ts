@@ -141,7 +141,13 @@ export async function fetchWithRetry(
     circuitBreaker,
   } = retryOptions;
 
-  const circuitKey = url;
+  // Use a normalized service key derived from origin + path, not the full URL with query params.
+  const circuitKey = (() => {
+    try {
+      const u = new URL(url);
+      return `${u.protocol}//${u.host}${u.pathname}`;
+    } catch { return url; }
+  })();
 
   // Check circuit breaker
   if (circuitBreaker && isCircuitOpen(circuitKey, circuitBreaker)) {
@@ -166,9 +172,9 @@ export async function fetchWithRetry(
           await sleep(delay);
           continue;
         }
-        // An exhausted retryable HTTP response is a dependency failure too.
+        // Exhausted retries — treat as failure, not success.
         if (circuitBreaker) recordFailure(circuitKey, circuitBreaker);
-        return response;
+        throw new Error(`fetchWithRetry: exhausted ${maxRetries} retries for ${url} (last status: ${response.status})`);
       }
       
       // Success

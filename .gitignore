@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 api_keys.json
+api_keys.json.backup.*
+.jwt_secret

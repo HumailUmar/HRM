@@ -53,10 +53,10 @@ export function getAccessToken(): string | null { return googleAccessToken; }
 export function getUser(): AuthUser | null { return currentUser; }
 
 export function getAuthHeaders(contentType: 'json' | 'none' = 'json'): Record<string, string> {
-  const token = getToken();
   return {
     ...(contentType === 'json' ? { 'Content-Type': 'application/json' } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    // JWT is sent via HttpOnly cookie; add an X-Requested-With header for CSRF defense
+    'X-Requested-With': 'XMLHttpRequest',
   };
 }
 

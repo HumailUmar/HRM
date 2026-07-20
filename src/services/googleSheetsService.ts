@@ -67,13 +67,25 @@ async function getSheetIdByName(sheetName: string): Promise<number | null> {
  * Read data from a Google Sheet range.
  * Only returns [] when the spreadsheet is genuinely unconfigured. Any other
  * error is rethrown so callers surface it instead of masking as empty data.
+ * Returns a distinguishable marker so callers can differentiate "not configured"
+ * from "genuinely empty" if needed.
  */
+export interface ReadSheetResult {
+  values: any[][] | null;
+  /** True when the sheet ID is not configured (data source missing). */
+  notConfigured: boolean;
+}
+
 export async function readSheet(sheetName: string, range: string): Promise<any[][]> {
   try {
     const result = await callSheetsApi(`/values/${encodeURIComponent(sheetName)}!${range}`);
     return result.values || [];
   } catch (e: any) {
     if (e?.message === 'Google Sheet ID is not set. Please set it in Settings.') {
+      // Return [] but also dispatch an event so the UI can warn about misconfiguration.
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('hrm:gsheet-not-configured', { detail: { sheetName } }));
+      }
       return [];
     }
     throw e;
@@ -150,7 +162,13 @@ export async function deleteRow(sheetName: string, rowIndex: number): Promise<vo
 export async function ensureSheetExists(sheetName: string, headers: string[]): Promise<void> {
   try {
     await readSheet(sheetName, 'A1:A1');
-  } catch {
+  } catch (e: any) {
+    // Distinguish auth/rate-limit errors from genuinely missing sheets.
+    const msg = (e?.message || '').toLowerCase();
+    if (msg.includes('401') || msg.includes('403') || msg.includes('429') || msg.includes('quota')) {
+      logger.error(`ensureSheetExists: cannot access "${sheetName}" — auth or rate limit:`, e?.message);
+      return;
+    }
     logger.info(`Sheet "${sheetName}" not found. Creating it...`);
     try {
       const requestBody = {
@@ -165,9 +183,8 @@ export async function ensureSheetExists(sheetName: string, headers: string[]): P
         ],
       };
       await callSheetsApi(':batchUpdate', 'POST', requestBody);
-      // Wait slightly and write headers
       await updateSheet(sheetName, 'A1', [headers]);
-    } catch (err) {
+    } catch (err: any) {
       logger.error(`Failed to auto-create sheet "${sheetName}":`, err);
     }
   }

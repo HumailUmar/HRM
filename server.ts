@@ -121,6 +121,7 @@ async function saveEmployeesStore(employees: any[]) {
     await saveEmployeesToDB(employees);
   } catch (error) {
     if (isNoDatabaseConfiguredError(error)) {
+      // Local storage save is synchronous; wrap in Promise for consistency
       saveEmployeesToLocalStore(employees);
       return;
     }
@@ -194,6 +195,9 @@ app.use(cors(corsOptions));
 // For preflight requests, respond with 204 (No Content)
 app.options('*', cors(corsOptions) as any);
 
+// WhatsApp webhook endpoint. Must read raw body for HMAC verification.
+// Use express.raw() before json() to capture the raw buffer.
+app.use('/api/whatsapp/webhook', express.raw({ type: '*/*', limit: '1mb' }));
 app.use(express.json({ limit: '2mb', verify: (req: any, _res, buffer) => { req.rawBody = buffer; } }));
 app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
@@ -251,7 +255,25 @@ if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
 const DEFAULT_TIMEOUT_MS = 10000;
 const AVERAGE_WORKING_DAYS = 22;
 
-const ACTUAL_JWT_SECRET = JWT_SECRET || (process.env.NODE_ENV === 'test' ? 'humail_eli_secret_key_2026' : crypto.randomBytes(32).toString('hex'));
+// Persist JWT secret to a file so it survives server restarts in dev mode.
+// In production JWT_SECRET must be set via environment variable.
+const JWT_SECRET_FILE = path.join(process.cwd(), '.jwt_secret');
+function getOrCreateJwtSecret(): string {
+  if (JWT_SECRET) return JWT_SECRET;
+  if (process.env.NODE_ENV === 'test') return 'humail_eli_secret_key_2026';
+  try {
+    if (fs.existsSync(JWT_SECRET_FILE)) {
+      const persisted = fs.readFileSync(JWT_SECRET_FILE, 'utf8').trim();
+      if (persisted.length >= 32) return persisted;
+    }
+    const secret = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(JWT_SECRET_FILE, secret, { mode: 0o600 });
+    return secret;
+  } catch {
+    return crypto.randomBytes(32).toString('hex');
+  }
+}
+const ACTUAL_JWT_SECRET = getOrCreateJwtSecret();
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean));
 if (process.env.NODE_ENV === 'production' && !GOOGLE_CLIENT_ID) {
@@ -278,7 +300,7 @@ async function fetchFromDevice(url: string, options: any = {}) {
   if (apiKey) {
     headers['Authorization'] = `Bearer ${apiKey}`;
   } else if (username || password) {
-    headers['Authorization'] = buildDeviceAuthHeader(apiKey, username, password);
+    headers['Authorization'] = buildDeviceAuthHeader(undefined, username, password);
   }
 
   if (!isUrlSafe(url)) {
@@ -393,18 +415,27 @@ async function fetchWithTimeout(resource, options: any = {}) {
 const API_KEYS_FILE = path.join(process.cwd(), 'api_keys.json');
 
 // Helper to encrypt/decrypt API keys file
+/** Encrypt/decrypt API keys file using AES-256-GCM with random IV per encryption. */
 function cryptApiKeys(data: string, decrypt = false): string {
   try {
-    const algorithm = 'aes-256-ctr';
-    const secretKey = crypto.createHash('sha256').update(ACTUAL_JWT_SECRET).digest();
-    const iv = Buffer.alloc(16, 0); // Using fixed IV for simplicity in this internal tool context, though not ideal for high security
+    const algorithm = 'aes-256-gcm';
+    const secretKey = crypto.scryptSync(ACTUAL_JWT_SECRET, 'hrm-api-keys-salt', 32);
 
     if (decrypt) {
+      const combined = Buffer.from(data, 'hex');
+      if (combined.length < 28) throw new Error('ciphertext too short');
+      const iv = combined.subarray(0, 12);
+      const authTag = combined.subarray(12, 28);
+      const ciphertext = combined.subarray(28);
       const decipher = crypto.createDecipheriv(algorithm, secretKey, iv);
-      return Buffer.concat([decipher.update(Buffer.from(data, 'hex')), decipher.final()]).toString();
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
     } else {
+      const iv = crypto.randomBytes(12);
       const cipher = crypto.createCipheriv(algorithm, secretKey, iv);
-      return Buffer.concat([cipher.update(data), cipher.final()]).toString('hex');
+      const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+      return Buffer.concat([iv, authTag, encrypted]).toString('hex');
     }
   } catch (err) {
     console.error('Crypt error:', err);
@@ -447,10 +478,24 @@ function saveApiKeys(keys: any[]) {
 
 function migrateApiKeys() {
   if (!fs.existsSync(API_KEYS_FILE)) return;
+  const backup = `${API_KEYS_FILE}.backup.${Date.now()}`;
   console.log('Migrating API keys to new encryption...');
-  const keys = getApiKeys();
-  saveApiKeys(keys);
-  console.log('API keys migration complete.');
+  try {
+    fs.copyFileSync(API_KEYS_FILE, backup);
+    const keys = getApiKeys();
+    if (!Array.isArray(keys) || keys.length === 0) {
+      console.warn('API keys file appears empty after read — restoring backup.');
+      fs.copyFileSync(backup, API_KEYS_FILE);
+      try { fs.unlinkSync(backup); } catch {}
+      return;
+    }
+    saveApiKeys(keys);
+    try { fs.unlinkSync(backup); } catch {}
+    console.log('API keys migration complete.');
+  } catch (e) {
+    console.error('API keys migration failed, restoring backup:', e);
+    try { fs.copyFileSync(backup, API_KEYS_FILE); fs.unlinkSync(backup); } catch {}
+  }
 }
 
 // Startup checks
@@ -501,11 +546,13 @@ const validateApiKey = (req, res, next) => {
   if (!validKey) {
     return res.status(401).json({ error: 'Invalid or revoked API key' });
   }
+  // Attach user-like payload so authorize() middleware can verify role.
+  req.user = { role: 'Admin', apiKey: true, name: validKey.name || 'API Key' };
   next();
 };
 
-// JWT token generation
-app.post('/api/v1/auth/token', (req: any, res: any) => {
+// JWT token generation — also rate-limited to prevent brute force.
+app.post('/api/v1/auth/token', apiLimiter, (req: any, res: any) => {
   const { apiKey } = req.body;
   if (!apiKey || !apiKey.startsWith('he_')) {
     return res.status(401).json({ error: 'Invalid API key' });
@@ -608,7 +655,17 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
         },
         exit: null,
         name,
-        email
+        email,
+        role,
+        status: 'Active',
+        department: isUserEmail ? 'DEPT-EXEC' : 'DEPT-GEN',
+        education: [],
+        certifications: [],
+        previousEmployers: [],
+        journeyTimeline: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        syncedAt: new Date().toISOString()
       } as any;
       employees.push(employee);
       await saveEmployeesStore(employees);
@@ -791,7 +848,17 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
 // DELETE /api/v1/employees/:id
 app.delete('/api/v1/employees/:id', authenticateToken, authorize(['Admin']), async (req: any, res: any) => {
   try {
-    await deleteEmployeeFromDB(req.params.id);
+    // Try DB delete first, fall back to local store
+    try {
+      await deleteEmployeeFromDB(req.params.id);
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        const employees = getEmployeesFromLocalStore();
+        saveEmployeesToLocalStore(employees.filter(e => e.id !== req.params.id));
+      } else {
+        throw dbError;
+      }
+    }
     res.json({ success: true, message: 'Employee deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -804,7 +871,16 @@ app.delete('/api/v1/employees/:id', authenticateToken, authorize(['Admin']), asy
 app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, startDate, endDate } = req.query as Record<string, string | undefined>;
-    let records = await getAttendanceFromDB();
+    let records: any[];
+    try {
+      records = await getAttendanceFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        records = getAttendanceFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     if (employeeId) records = records.filter(r => r.employeeId === employeeId);
     if (startDate) records = records.filter(r => r.date >= startDate);
     if (endDate) records = records.filter(r => r.date <= endDate);
@@ -817,10 +893,23 @@ app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Mana
 // PUT /api/v1/employees/bulk
 app.put('/api/v1/employees/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req: any, res: any) => {
   try {
-    const validation = bulkArraySchema('employees', EmployeeSchema.partial().passthrough()).safeParse(req.body);
+    // Require at minimum an id for each employee in bulk operations.
+    const BulkEmployeeSchema = EmployeeSchema.partial().passthrough().refine(e => !!e.id, { message: 'Each employee must have an id' });
+    const validation = bulkArraySchema('employees', BulkEmployeeSchema).safeParse(req.body);
     if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
     const employees = validation.data.employees;
-    await saveEmployeesStore(employees);
+    // Read existing employees and merge; don't blindly overwrite.
+    let existing: any[];
+    try {
+      existing = await getEmployeesFromDB();
+    } catch {
+      existing = getEmployeesFromLocalStore();
+    }
+    const existingMap = new Map(existing.map((e: any) => [e.id, e]));
+    for (const emp of employees) {
+      existingMap.set(emp.id, { ...(existingMap.get(emp.id) || {}), ...emp, updatedAt: new Date().toISOString() });
+    }
+    await saveEmployeesStore([...existingMap.values()]);
     res.json({ success: true, count: employees.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -835,7 +924,16 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
 
-    const records = await getAttendanceFromDB();
+    let records: any[];
+    try {
+      records = await getAttendanceFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        records = getAttendanceFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     const newRecord = {
       id: `ATT-${Date.now()}`,
       ...validation.data,
@@ -843,7 +941,15 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
       updatedAt: new Date().toISOString()
     };
     records.push(newRecord);
-    await saveAttendanceToDB(records);
+    try {
+      await saveAttendanceToDB(records);
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        saveAttendanceToLocalStore(records);
+      } else {
+        throw dbError;
+      }
+    }
     res.status(201).json({ success: true, data: newRecord });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -869,7 +975,16 @@ app.put('/api/v1/attendance/bulk', authenticateToken, authorize(['HR', 'Admin'])
 app.get('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, status } = req.query as Record<string, string | undefined>;
-    let leaves = await getLeavesFromDB();
+    let leaves: any[];
+    try {
+      leaves = await getLeavesFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        leaves = getLeavesFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     if (employeeId) leaves = leaves.filter(l => l.employeeId === employeeId);
     if (status) leaves = leaves.filter(l => l.status === status);
     res.json({ success: true, data: leaves, count: leaves.length });
@@ -939,7 +1054,16 @@ app.put('/api/v1/leaves/bulk', authenticateToken, authorize(['HR', 'Admin']), as
 app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const { employeeId, month } = req.query as Record<string, string | undefined>;
-    let payroll = await getPayrollFromDB();
+    let payroll: any[];
+    try {
+      payroll = await getPayrollFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        payroll = getPayrollFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     if (employeeId) payroll = payroll.filter(p => p.employeeId === employeeId);
     if (month) payroll = payroll.filter(p => p.month === month);
     res.json({ success: true, data: payroll, count: payroll.length });
@@ -990,7 +1114,9 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
     
     // Better payroll calculation using Salary Structure
     for (const emp of employees) {
-      const empAttendance = attendance.filter(a => a.employeeId === emp.id && a.date.includes(`${year}-${month}`));
+      // Use startsWith to avoid month substring bugs (e.g. "1" matching "10", "11", "12")
+      const targetPrefix = `${year}-${String(month).padStart(2, '0')}`;
+      const empAttendance = attendance.filter(a => a.employeeId === emp.id && a.date.startsWith(targetPrefix));
       const presentDays = empAttendance.filter(a => a.status === 'Full Day').length;
       
       // Fetch Salary Structure asynchronously from database, fallback to local/default structure
@@ -1031,7 +1157,16 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
 
 app.get('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
-    const candidates = await getCandidatesFromDB();
+    let candidates: any[];
+    try {
+      candidates = await getCandidatesFromDB();
+    } catch (dbError) {
+      if (isNoDatabaseConfiguredError(dbError)) {
+        candidates = getCandidatesFromLocalStore();
+      } else {
+        throw dbError;
+      }
+    }
     res.json({ success: true, data: candidates, count: candidates.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1355,16 +1490,20 @@ async function callGeminiWithRetry<T>(fn: () => Promise<T>, context: string): Pr
   let lastError: Error | null = null;
   let attempt = 0;
   const maxRetries = 2;
+  // Match exact HTTP status codes and well-known error patterns, not substrings.
+  const isRetryable = (error: any): boolean => {
+    const status = error?.status || error?.code;
+    if (status === 429 || status === 500 || status === 502 || status === 503) return true;
+    const msg: string = (error?.message || '').toLowerCase();
+    return /\b(429|500|502|503|529)\b/.test(msg) || msg.includes('resource has been exhausted') || msg.includes('rate limit');
+  };
   
   while (attempt <= maxRetries) {
     try {
       return await fn();
     } catch (error: any) {
       lastError = error;
-      const msg = error.message ? error.message.toLowerCase() : '';
-      // Check if it's a rate limit or server error
-      if (msg.includes('429') || msg.includes('500') || 
-          msg.includes('503') || msg.includes('timed out') || msg.includes('overloaded')) {
+      if (isRetryable(error)) {
         attempt++;
         if (attempt <= maxRetries) {
           const delay = 1000 * Math.pow(2, attempt - 1) + Math.random() * 300;
@@ -1602,11 +1741,16 @@ function isUrlSafe(urlString: string): boolean {
     const match = hostname.match(ipv4Regex);
     if (match) {
       const octets = match.slice(1, 5).map(Number);
-      // Block link-local / metadata style ranges, but allow RFC1918 LAN ranges
-      // because biometric devices commonly live on private networks.
-      if (octets[0] === 169 && octets[1] === 254) return false; // 169.254.0.0/16
+    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    const match = hostname.match(ipv4Regex);
+    if (match) {
+      const octets = match.slice(1, 5).map(Number);
+      if (octets[0] === 169 && octets[1] === 254) return false;
+      if (octets[0] === 10 || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31 ||
+          octets[0] === 192 && octets[1] === 168) {
+        console.warn(`isUrlSafe: allowing private IP ${hostname} — ensure intentional biometric device`);
+      }
     }
-    // Block IPv6 private ranges (simplified)
     if (hostname.startsWith('fe80:') || hostname.startsWith('fd00:') || hostname === '::1') return false;
     
     return true;
@@ -1773,18 +1917,26 @@ app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', '
       const chunks: any[] = [];
       let totalSize = 0;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        totalSize += value.length;
-        if (totalSize > MAX_SIZE) {
-          await reader.cancel();
-          return res.status(413).json({ 
-            success: false, 
-            error: `Video size exceeded limit (${Math.round(totalSize/1024/1024)} MB > 100 MB)` 
-          });
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalSize += value.length;
+          if (totalSize > MAX_SIZE) {
+            await reader.cancel();
+            return res.status(413).json({ 
+              success: false, 
+              error: `Video size exceeded limit (${Math.round(totalSize/1024/1024)} MB > 100 MB)` 
+            });
+          }
+          chunks.push(value);
         }
-        chunks.push(value);
+      } catch (streamError: any) {
+        try { await reader.cancel(); } catch {}
+        return res.status(400).json({
+          success: false,
+          error: `Failed to read video stream: ${streamError.message || 'stream error'}`
+        });
       }
 
       const videoBuffer = Buffer.concat(chunks);
@@ -1873,8 +2025,10 @@ app.post("/api/whatsapp/webhook", (req: any, res) => {
   if (!WHATSAPP_WEBHOOK_SECRET) {
     return res.status(503).json({ error: 'WhatsApp webhook verification is not configured' });
   }
+  // req.body is a Buffer from express.raw(); req.rawBody is the json() verify fallback.
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : (req.rawBody || Buffer.from(''));
   const signature = req.get('x-hub-signature-256') || '';
-  const expected = `sha256=${crypto.createHmac('sha256', WHATSAPP_WEBHOOK_SECRET).update(req.rawBody || '').digest('hex')}`;
+  const expected = `sha256=${crypto.createHmac('sha256', WHATSAPP_WEBHOOK_SECRET).update(rawBody).digest('hex')}`;
   const valid = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
   if (!valid) return res.status(401).json({ error: 'Invalid webhook signature' });
   // Do not log raw webhook content: it may contain PII and message text.

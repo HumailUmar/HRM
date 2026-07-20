@@ -271,7 +271,10 @@ export async function savePayrollToDB(records: any[]) {
     for (const rec of records) {
       const values = columns.map(c => {
         if (c === 'updatedAt') return new Date().toISOString();
-        return rec[c] || 0;
+        // Only default numeric fields to 0; leave text/string fields as empty string.
+        const numericFields = new Set(['baseSalary', 'bonus', 'penalty', 'leaveDeductions', 'netSalary']);
+        if (numericFields.has(c)) return rec[c] !== undefined && rec[c] !== null ? rec[c] : 0;
+        return rec[c] !== undefined && rec[c] !== null ? rec[c] : '';
       });
       
       let query;

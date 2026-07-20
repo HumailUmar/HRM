@@ -209,11 +209,6 @@ export default function App() {
       if (result) {
         setAuthData(result.token, result.user);
         setUser(result.user);
-        setSettings(prev => {
-          const next = { ...prev, isMockMode: false };
-          persistSettings(next);
-          return next;
-        });
       }
     } catch (e) {
       logger.error("Sign in failed:", e);
@@ -222,29 +217,33 @@ export default function App() {
     }
   };
   const handleUpdateLeaveStatus = async (id: string, status: 'Approved' | 'Rejected', approver: string) => {
+    // Snapshot the pre-update state for clean rollback in case of save failure.
+    const previousLeaves = leaves;
     const updatedLeaves = leaves.map(l => {
-      if (l.id === id) {
-        return { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() };
-      }
+      if (l.id === id) return { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() };
       return l;
     });
-    const previousLeaves = leaves;
     setLeaves(updatedLeaves);
     try {
       await data.saveLeaves(updatedLeaves);
     } catch (error) {
       logger.error('Failed to update leave status:', error);
-      setLeaves(previousLeaves);
+      setLeaves(previousLeaves); // roll back to pre-update state
     }
   };
   const handleSignOut = async () => {
     await logout();
     setUser(null);
-    setSettings(prev => {
-      const next = { ...prev, isMockMode: true };
-      persistSettings(next);
-      return next;
-    });
+    // Clear all data state to prevent leakage between user sessions.
+    setEmployees([]);
+    setAttendance([]);
+    setPayrolls([]);
+    setLeaves([]);
+    setCandidates([]);
+    setDocuments([]);
+    setOnboardingTasks([]);
+    setOnboardingTemplates([]);
+    setJobDescriptions([]);
   };
   const canAccess = (tab: string, role: string | undefined) => {
     // Default to 'Employee' if role is missing or undefined

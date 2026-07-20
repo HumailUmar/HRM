@@ -11,11 +11,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
   }
 
   private getHeaders() {
-    const token = getToken();
-    return {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
+    return { 'Content-Type': 'application/json' };
   }
 
   async connect(): Promise<void> {
@@ -29,7 +25,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
   // ---- EMPLOYEES ----
   async getEmployees(): Promise<Employee[]> {
     try {
-      const res = await fetch('/api/v1/employees', { headers: this.getHeaders() });
+      const res = await fetch('/api/v1/employees', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getEmployees();
       const data = await res.json();
       return data.data || [];
@@ -40,7 +36,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
 
   async getEmployee(id: string): Promise<Employee | null> {
     try {
-      const res = await fetch(`/api/v1/employees/${id}`, { headers: this.getHeaders() });
+      const res = await fetch(`/api/v1/employees/${id}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getEmployee(id);
       const data = await res.json();
       return data.data || null;
@@ -56,7 +52,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
       const method = isNew ? 'POST' : 'PUT';
       const res = await fetch(url, {
         method,
-        headers: this.getHeaders(),
+        headers: this.getHeaders(), credentials: 'same-origin',
         body: JSON.stringify(employee),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -82,7 +78,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
     try {
       const res = await fetch(`/api/v1/employees/${id}`, {
         method: 'DELETE',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(), credentials: 'same-origin',
       });
       if (!res.ok) throw new Error(await res.text());
     } catch {
@@ -93,7 +89,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
   // ---- ATTENDANCE ----
   async getAttendance(): Promise<AttendanceRecord[]> {
     try {
-      const res = await fetch('/api/v1/attendance', { headers: this.getHeaders() });
+      const res = await fetch('/api/v1/attendance', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getAttendance();
       const data = await res.json();
       return data.data || [];
@@ -104,7 +100,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
 
   async getAttendanceByEmployee(employeeId: string): Promise<AttendanceRecord[]> {
     try {
-      const res = await fetch(`/api/v1/attendance?employeeId=${employeeId}`, { headers: this.getHeaders() });
+      const res = await fetch(`/api/v1/attendance?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getAttendanceByEmployee(employeeId);
       const data = await res.json();
       return data.data || [];
@@ -117,7 +113,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
     try {
       const res = await fetch('/api/v1/attendance', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(), credentials: 'same-origin',
         body: JSON.stringify(record),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -140,7 +136,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
   // ---- PAYROLL ----
   async getPayroll(): Promise<PayrollRecord[]> {
     try {
-      const res = await fetch('/api/v1/payroll', { headers: this.getHeaders() });
+      const res = await fetch('/api/v1/payroll', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getPayroll();
       const data = await res.json();
       return data.data || [];
@@ -151,7 +147,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
 
   async getPayrollByEmployee(employeeId: string): Promise<PayrollRecord[]> {
     try {
-      const res = await fetch(`/api/v1/payroll?employeeId=${employeeId}`, { headers: this.getHeaders() });
+      const res = await fetch(`/api/v1/payroll?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getPayrollByEmployee(employeeId);
       const data = await res.json();
       return data.data || [];
@@ -167,7 +163,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
         records.map(async (rec) => {
           const res = await fetch('/api/v1/payroll', {
             method: 'POST',
-            headers: this.getHeaders(),
+            headers: this.getHeaders(), credentials: 'same-origin',
             body: JSON.stringify(rec),
           });
           if (!res.ok) throw new Error(await res.text());
@@ -183,7 +179,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
   // ---- LEAVES ----
   async getLeaves(): Promise<LeaveRecord[]> {
     try {
-      const res = await fetch('/api/v1/leaves', { headers: this.getHeaders() });
+      const res = await fetch('/api/v1/leaves', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getLeaves();
       const data = await res.json();
       return data.data || [];
@@ -194,7 +190,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
 
   async getLeavesByEmployee(employeeId: string): Promise<LeaveRecord[]> {
     try {
-      const res = await fetch(`/api/v1/leaves?employeeId=${employeeId}`, { headers: this.getHeaders() });
+      const res = await fetch(`/api/v1/leaves?employeeId=${employeeId}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getLeavesByEmployee(employeeId);
       const data = await res.json();
       return data.data || [];
@@ -210,7 +206,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
       const method = isNew ? 'POST' : 'PUT';
       const res = await fetch(url, {
         method,
-        headers: this.getHeaders(),
+        headers: this.getHeaders(), credentials: 'same-origin',
         body: JSON.stringify(leave),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -233,7 +229,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
   // ---- CANDIDATES ----
   async getCandidates(): Promise<Candidate[]> {
     try {
-      const res = await fetch('/api/v1/candidates', { headers: this.getHeaders() });
+      const res = await fetch('/api/v1/candidates', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) return super.getCandidates();
       const data = await res.json();
       return data.data || [];
@@ -246,7 +242,7 @@ export class PostgreSQLAdapter extends LocalStorageAdapter {
     try {
       const res = await fetch('/api/v1/candidates', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(), credentials: 'same-origin',
         body: JSON.stringify(candidate),
       });
       if (!res.ok) throw new Error(await res.text());
