@@ -23,7 +23,11 @@ import {
   JDResumeMatch,
   JobDescription,
   LegacyOnboardingTask,
+  SuccessionPlan,
   OnboardingTemplate,
+  ExitProcessStage,
+  SettlementConfig,
+  PerformanceReviewCycle,
   TrainingQuiz,
   SalaryStructure,
   SalaryRevision,
@@ -138,6 +142,7 @@ export interface IDataAdapter {
   getEmployeeHistory(employeeId: string): Promise<EmployeeHistoryEntry[]>;
   createExitRecord(record: ExitRecord): Promise<void>;
   getExitRecords(): Promise<ExitRecord[]>;
+  saveExitRecords(records: ExitRecord[]): Promise<void>;
 
   // EXIT TEMPLATES
   getExitChecklistTemplates(): Promise<ExitChecklistTemplate[]>;
@@ -218,6 +223,14 @@ export interface IDataAdapter {
   saveHires(hires: HireDetails[]): Promise<void>;
   getInterviewSchedules(): Promise<InterviewSchedule[]>;
   saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void>;
+
+  // ONBOARDING
+  getOnboardingTasks(): Promise<LegacyOnboardingTask[]>;
+  saveOnboardingTasks(tasks: LegacyOnboardingTask[]): Promise<void>;
+
+  // SUCCESSION
+  getSuccessionPlans(): Promise<SuccessionPlan[]>;
+  saveSuccessionPlans(plans: SuccessionPlan[]): Promise<void>;
 
   // ORG CHART
   getOrgChartNodes(): Promise<OrgChartNode[]>;

@@ -59,7 +59,7 @@ function mapRowsSafe<T>(rows: any[][], deserialize: (row: any[]) => T): T[] {
   return out;
 }
 
-export class GoogleSheetsAdapter implements IDataAdapter {
+export class GoogleSheetsAdapter extends LocalStorageAdapter {
   private spreadsheetId: string;
   private settings: AppSettings;
   private localFallback = new LocalStorageAdapter();

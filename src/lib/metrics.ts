@@ -13,9 +13,9 @@ export interface MetricsSnapshot {
   lastUpdated: string;
 }
 
-type CounterKey = keyof MetricsSnapshot;
+type CounterKey = Exclude<keyof MetricsSnapshot, 'lastUpdated'>;
 
-const counters: Record<CounterKey, number> = {
+const counters: MetricsSnapshot = {
   syncSuccess: 0,
   syncFailure: 0,
   syncSkipped: 0,
@@ -52,10 +52,8 @@ export function getMetrics(): MetricsSnapshot {
 }
 
 export function resetMetrics() {
-  for (const key of Object.keys(counters)) {
-    if (key !== 'lastUpdated') {
-      counters[key as CounterKey] = 0;
-    }
+  for (const key of Object.keys(counters) as Array<CounterKey>) {
+    counters[key] = 0;
   }
   counters.lastUpdated = new Date().toISOString();
 }

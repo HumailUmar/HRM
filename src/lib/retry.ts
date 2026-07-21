@@ -28,6 +28,26 @@ export interface CircuitState {
 }
 
 export const circuitStates = new Map<string, CircuitState>();
+const CIRCUIT_STATE_TTL = 30 * 60 * 1000;
+const MAX_CIRCUIT_STATES = 500;
+
+export function pruneCircuitStates(): void {
+  const now = Date.now();
+  for (const [key, state] of circuitStates.entries()) {
+    if (state.state === 'CLOSED' && now - state.lastFailureTime > CIRCUIT_STATE_TTL) {
+      circuitStates.delete(key);
+    }
+  }
+  if (circuitStates.size > MAX_CIRCUIT_STATES) {
+    const entries = [...circuitStates.entries()];
+    entries.sort((a, b) => a[1].lastFailureTime - b[1].lastFailureTime);
+    for (let i = 0; i < entries.length - MAX_CIRCUIT_STATES; i++) {
+      circuitStates.delete(entries[i][0]);
+    }
+  }
+}
+
+setInterval(pruneCircuitStates, 5 * 60 * 1000);
 
 export function getCircuitState(key: string): CircuitState {
   if (!circuitStates.has(key)) {

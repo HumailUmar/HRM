@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { EmployeeHistoryEntry } from '../types';
 import { useData } from '../contexts/DataContext';
 import { Search, Filter, Download, Activity, Clock, User, ArrowRight, FileText } from 'lucide-react';

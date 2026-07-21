@@ -2039,3 +2039,11 @@ export interface SalaryRevision {
   notes?: string;
   createdAt: string;
 }
+
+export interface SheetLog {
+  id: string;
+  sheetName: string;
+  timestamp: string;
+  action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC';
+  rowData: string;
+}

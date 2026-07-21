@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Target, BarChart3, Plus, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { User, PerformanceReviewCycle, PerformanceGoal, Department, Designation } from '../types';
+import { User, Employee, PerformanceReviewCycle, PerformanceGoal, Department, Designation } from '../types';
 import { useData } from '../contexts/DataContext';
 import ReviewCycleModal from './ReviewCycleModal';
 import ReviewTemplates from './ReviewTemplates';
@@ -22,7 +22,7 @@ export default function Performance({ user, departments, designations }: Perform
   const data = useData();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'cycles' | 'reviews' | 'goals' | 'feedback' | 'analytics' | 'templates' | 'my-reviews' | 'team-reviews' | 'peer-reviews'>('dashboard');
   const [cycles, setCycles] = useState<PerformanceReviewCycle[]>([]);
-  const [employees, setEmployees] = useState<User[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<PerformanceReviewCycle | undefined>(undefined);
@@ -46,15 +46,15 @@ export default function Performance({ user, departments, designations }: Perform
   }, [data]);
 
   const getFilteredData = () => {
-    let filteredReviews = allReviews;
+    let filteredReviews = reviews;
     let filteredEmployees = employees.filter(e => e.employment.status !== 'Terminated');
 
     if (user?.role === 'Employee') {
-      filteredReviews = allReviews.filter(r => r.employeeId === user.employeeId);
+      filteredReviews = reviews.filter(r => r.employeeId === user.employeeId);
       filteredEmployees = employees.filter(e => e.id === user.employeeId);
     } else if (user?.role === 'Manager') {
       const teamIds = employees.filter(e => e.employment.reportingManagerId === user.employeeId).map(e => e.id);
-      filteredReviews = allReviews.filter(r => teamIds.includes(r.employeeId));
+      filteredReviews = reviews.filter(r => teamIds.includes(r.employeeId));
       filteredEmployees = employees.filter(e => teamIds.includes(e.id) || e.id === user.employeeId);
     }
     
@@ -69,7 +69,7 @@ export default function Performance({ user, departments, designations }: Perform
     : 0;
   const avgScore = (rawAvgScore / 20).toFixed(1);
 
-  const handleSaveCycle = (cycle: PerformanceReviewCycle) => {
+  const handleSaveCycle = async (cycle: PerformanceReviewCycle) => {
     if (new Date(cycle.startDate) >= new Date(cycle.endDate)) {
       alert("Start date must be before end date.");
       return;
@@ -199,13 +199,13 @@ export default function Performance({ user, departments, designations }: Perform
       {activeTab === 'team-reviews' && (
         <ManagerReview 
           managerId={user?.employeeId} 
-          managerName={getEmployees().find(e => e.id === user?.employeeId)?.name || 'Manager'} 
+          managerName={employees.find(e => e.id === user?.employeeId)?.name || 'Manager'} 
         />
       )}
       {activeTab === 'peer-reviews' && (
         <PeerReview 
           userId={user?.employeeId} 
-          userName={getEmployees().find(e => e.id === user?.employeeId)?.name || 'Employee'} 
+          userName={employees.find(e => e.id === user?.employeeId)?.name || 'Employee'} 
         />
       )}
       {activeTab === 'goals' && <PerformanceGoals user={user} />}

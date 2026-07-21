@@ -59,10 +59,11 @@ export function generateUUID(prefix: string = ''): string {
   // Fallback: use crypto.getRandomValues for collision-resistant IDs.
   try {
     const arr = new Uint32Array(2);
-    crypto.getRandomValues?.(arr);
+    crypto.getRandomValues(arr);
     const id = arr[0].toString(36).toUpperCase() + arr[1].toString(36).toUpperCase();
     return `${prefix}${id.slice(0, 12)}`;
   } catch {
+    console.error('WARNING: crypto.getRandomValues unavailable; ID generation may be predictable');
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 12; i++) {

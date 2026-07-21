@@ -38,8 +38,8 @@ export class MySQLAdapter extends LocalStorageAdapter {
       const res = await fetchWithRetry('/api/v1/employees', { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) {
         if (this.isAuthError(res.status)) {
-          logger.error('MySQLAdapter.getEmployees: auth failed', res.status);
-          throw new Error(`Auth failed: ${res.status}`);
+          logger.error('MySQLAdapter.getEmployees: auth failed', String(res.status));
+          throw new Error(`Auth failed: ${String(res.status)}`);
         }
         return super.getEmployees();
       }
@@ -57,8 +57,8 @@ export class MySQLAdapter extends LocalStorageAdapter {
       const res = await fetchWithRetry(`/api/v1/employees/${id}`, { headers: this.getHeaders(), credentials: 'same-origin' });
       if (!res.ok) {
         if (this.isAuthError(res.status)) {
-          logger.error('MySQLAdapter.getEmployee: auth failed', res.status);
-          throw new Error(`Auth failed: ${res.status}`);
+          logger.error('MySQLAdapter.getEmployee: auth failed', String(res.status));
+          throw new Error(`Auth failed: ${String(res.status)}`);
         }
         return super.getEmployee(id);
       }
@@ -84,8 +84,8 @@ export class MySQLAdapter extends LocalStorageAdapter {
       });
       if (!res.ok) {
         if (this.isAuthError(res.status)) {
-          logger.error('MySQLAdapter.saveEmployee: auth failed', res.status);
-          throw new Error(`Auth failed: ${res.status}`);
+          logger.error('MySQLAdapter.saveEmployee: auth failed', String(res.status));
+          throw new Error(`Auth failed: ${String(res.status)}`);
         }
         throw new Error(await res.text());
       }
@@ -128,8 +128,8 @@ export class MySQLAdapter extends LocalStorageAdapter {
       });
       if (!res.ok) {
         if (this.isAuthError(res.status)) {
-          logger.error('MySQLAdapter.deleteEmployee: auth failed', res.status);
-          throw new Error(`Auth failed: ${res.status}`);
+          logger.error('MySQLAdapter.deleteEmployee: auth failed', String(res.status));
+          throw new Error(`Auth failed: ${String(res.status)}`);
         }
         throw new Error(await res.text());
       }

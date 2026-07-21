@@ -87,7 +87,7 @@ export async function verifySession(): Promise<AuthUser | null> {
     }
 
     const payload = await response.json();
-    const user = payload?.user || getUser();
+    const user = payload?.user;
     if (!user) {
       clearAuthData();
       incrementAuthFailure();
@@ -100,7 +100,8 @@ export async function verifySession(): Promise<AuthUser | null> {
   } catch (error) {
     logger.warn('Session verification failed:', error);
     incrementAuthFailure();
-    return getUser();
+    clearAuthData();
+    return null;
   }
 }
 

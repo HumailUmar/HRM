@@ -39,7 +39,7 @@ export interface DatabaseConnectionConfig {
   timeout?: number;
 }
 
-export abstract class BaseDatabaseAdapter implements IDataAdapter {
+export abstract class BaseDatabaseAdapter {
   protected config: DatabaseConnectionConfig;
   protected isConnected: boolean = false;
   protected lastSyncTime: string | null = null;

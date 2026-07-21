@@ -82,6 +82,8 @@ import {
   getUsers
 } from "./src/lib/storage.js";
 import { fetchWithRetry, circuitStates } from "./src/lib/retry.js";
+import { withLock } from "./src/lib/distributedLock.js";
+import { csrfProtection, setCsrfCookie } from "./src/lib/csrf.js";
 
 
 const TRAINING_ASSIGNMENT_HEADERS = [
@@ -99,7 +101,7 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 export const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 const isNoDatabaseConfiguredError = (error: unknown): boolean => {
   return error instanceof Error && error.message.includes('No database configured');
@@ -107,10 +109,18 @@ const isNoDatabaseConfiguredError = (error: unknown): boolean => {
 
 async function getEmployeesStore() {
   try {
-    return await getEmployeesFromDB();
+    const result = await getEmployeesFromDB();
+    if (!Array.isArray(result)) {
+      throw new Error('Invalid response from database: expected array of employees');
+    }
+    return result;
   } catch (error) {
     if (isNoDatabaseConfiguredError(error)) {
-      return getEmployeesFromLocalStore();
+      const local = getEmployeesFromLocalStore();
+      if (!Array.isArray(local)) {
+        throw new Error('Invalid response from local store: expected array of employees');
+      }
+      return local;
     }
     throw error;
   }
@@ -121,8 +131,12 @@ async function saveEmployeesStore(employees: any[]) {
     await saveEmployeesToDB(employees);
   } catch (error) {
     if (isNoDatabaseConfiguredError(error)) {
-      // Local storage save is synchronous; wrap in Promise for consistency
-      saveEmployeesToLocalStore(employees);
+      try {
+        saveEmployeesToLocalStore(employees);
+      } catch (localError) {
+        console.error('CRITICAL: Both database and local storage failed:', localError);
+        throw new Error('Persistence layer completely unavailable');
+      }
       return;
     }
     throw error;
@@ -203,11 +217,63 @@ app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
 // ===== INPUT VALIDATION SCHEMAS =====
 const EmployeeSchema = z.object({
+  id: z.string().optional(),
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email").optional().or(z.literal('')),
   role: z.string().min(1, "Role is required"),
   department: z.string().optional(),
   status: z.enum(['Active', 'Onboarding', 'On Leave', 'Suspended', 'Probation', 'Resigned', 'Retired', 'Deceased', 'Contract Expired', 'Terminated']).optional().default('Active'),
+  personal: z.object({
+    name: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    dateOfBirth: z.string().optional(),
+    gender: z.string().optional(),
+    maritalStatus: z.string().optional(),
+    personalEmail: z.string().optional(),
+    phonePersonal: z.string().optional(),
+    cnic: z.string().optional(),
+    passportNumber: z.string().optional(),
+    nationality: z.string().optional(),
+    address: z.string().optional(),
+    emergencyContactName: z.string().optional(),
+    emergencyContactPhone: z.string().optional(),
+    profileImage: z.string().optional(),
+  }).optional(),
+  employment: z.object({
+    joiningDate: z.string().optional(),
+    status: z.string().optional(),
+    designationId: z.string().optional(),
+    departmentId: z.string().optional(),
+    employmentType: z.string().optional(),
+    workLocation: z.string().optional(),
+    shift: z.string().optional(),
+    seatNumber: z.number().optional(),
+    role: z.string().optional(),
+    punchCode: z.string().optional(),
+    reportingManagerId: z.string().optional(),
+    probationEndDate: z.string().optional(),
+    confirmationDate: z.string().optional(),
+    contractStartDate: z.string().optional(),
+    contractEndDate: z.string().optional(),
+    resignationDate: z.string().optional(),
+    lastWorkingDate: z.string().optional(),
+    terminationDate: z.string().optional(),
+    terminationReason: z.string().optional(),
+  }).optional(),
+  compensation: z.object({
+    payGradeId: z.string().optional(),
+    currency: z.string().optional(),
+    baseSalary: z.number().optional(),
+    salaryStructureJson: z.string().optional(),
+  }).optional(),
+  onboarding: z.object({
+    contractSigned: z.boolean().optional(),
+    trainingAssigned: z.boolean().optional(),
+    trainingCompleted: z.boolean().optional(),
+    welcomeEmailSent: z.boolean().optional(),
+    feedbackSubmitted: z.boolean().optional(),
+  }).optional(),
 });
 
 const AttendanceSchema = z.object({
@@ -228,7 +294,7 @@ const PayrollRecordSchema = NonEmptyRecordSchema;
 const CandidateSchema = NonEmptyRecordSchema;
 
 const bulkArraySchema = <T extends z.ZodTypeAny>(key: string, itemSchema: T) =>
-  z.object({ [key]: z.array(itemSchema).min(1, `${key} must contain at least one record`) });
+  z.object({ [key]: z.array(itemSchema).min(1, `${key} must contain at least one record`).max(MAX_BULK_SIZE, `${key} exceeds maximum of ${MAX_BULK_SIZE} records`) });
 
 const LeaveSchema = z.object({
   employeeId: z.string().min(1, "Employee ID is required"),
@@ -254,6 +320,9 @@ if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
 }
 const DEFAULT_TIMEOUT_MS = 10000;
 const AVERAGE_WORKING_DAYS = 22;
+const MAX_BULK_SIZE = 1000;
+const DEFAULT_PAGE_SIZE = 100;
+const MAX_PAGE_SIZE = 200;
 
 // Persist JWT secret to a file so it survives server restarts in dev mode.
 // In production JWT_SECRET must be set via environment variable.
@@ -532,6 +601,39 @@ const aiLimiter = rateLimit({
   max: 10,
   message: { error: 'Too many AI requests, please try again later.' },
 });
+
+// Biometric device integrations are expensive (network calls to hardware).
+const biometricLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: 'Too many biometric requests, please try again later.' },
+});
+
+// Google Drive/Sheets API calls are rate-limited by Google; bound client bursts.
+const sheetsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Too many Google Sheets requests, please try again later.' },
+});
+
+// WhatsApp sends cost money; strictly limit.
+const whatsappLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { error: 'Too many WhatsApp requests, please try again later.' },
+});
+
+// Apply rate limiters to expensive/external-integration route groups.
+// These MUST be registered before the route definitions they target.
+app.use('/api/biometric', biometricLimiter);
+app.use('/api/zkteco', biometricLimiter);
+app.use('/api/biostar', biometricLimiter);
+app.use('/api/hikvision', biometricLimiter);
+app.use('/api/generic', biometricLimiter);
+app.use('/api/drive', sheetsLimiter);
+app.use('/api/sheets', sheetsLimiter);
+app.use('/api/whatsapp/send', whatsappLimiter);
+
 let activeVideoAnalyses = 0;
 const MAX_CONCURRENT_VIDEO_ANALYSES = 2;
 
@@ -602,14 +704,16 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
     }
 
     const googleTokenInfo: any = await googleResponse.json();
+    if (!googleTokenInfo || typeof googleTokenInfo !== 'object' || Array.isArray(googleTokenInfo)) {
+      return res.status(401).json({ error: 'Invalid Google ID token response' });
+    }
     const email = typeof googleTokenInfo.email === 'string' ? googleTokenInfo.email.toLowerCase() : '';
     const now = Math.floor(Date.now() / 1000);
-    // tokeninfo validates the signature. Validate the claims that bind that token to
-    // this application before using any identity data from it.
     const validIssuer = googleTokenInfo.iss === 'accounts.google.com' || googleTokenInfo.iss === 'https://accounts.google.com';
     const validAudience = !!GOOGLE_CLIENT_ID && (googleTokenInfo.aud === GOOGLE_CLIENT_ID || googleTokenInfo.azp === GOOGLE_CLIENT_ID);
-    const validExpiry = Number(googleTokenInfo.exp) > now;
-    if (!email || googleTokenInfo.email_verified !== 'true' && googleTokenInfo.email_verified !== true || !validIssuer || !validAudience || !validExpiry) {
+    const validExpiry = typeof googleTokenInfo.exp === 'number' && Number(googleTokenInfo.exp) > now;
+    const emailVerified = googleTokenInfo.email_verified === 'true' || googleTokenInfo.email_verified === true;
+    if (!email || !emailVerified || !validIssuer || !validAudience || !validExpiry) {
       return res.status(401).json({ error: 'Google ID token claims could not be verified' });
     }
     const name = googleTokenInfo.name || googleTokenInfo.given_name || email || 'Unknown User';
@@ -725,15 +829,32 @@ app.post('/api/v1/auth/logout', (req: any, res: any) => {
 // Apply rate limiting and API key validation to all /api/v1 routes
 app.use('/api/v1', apiLimiter);
 
+// Lightweight CSRF: require X-Requested-With: XMLHttpRequest on state-changing methods.
+// Combined with strict CORS, this prevents cross-origin form submissions from forging requests.
+app.use('/api/v1', (req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
+      return res.status(403).json({ error: 'CSRF token missing or invalid' });
+    }
+  }
+  next();
+});
 
 // GET /api/v1/employees
 app.get('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req: any, res: any) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(MAX_PAGE_SIZE, parseInt(req.query.limit as string) || DEFAULT_PAGE_SIZE);
+    const offset = (page - 1) * limit;
     const employees = await getEmployeesStore();
+    const paginated = employees.slice(offset, offset + limit);
     res.json({
       success: true,
-      data: employees,
-      count: employees.length
+      data: paginated,
+      count: employees.length,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(employees.length / limit))
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -796,7 +917,7 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
       return res.status(403).json({ error: 'Access denied. You can only update your own profile or must be HR/Admin.' });
     }
 
-    const validation = EmployeeSchema.partial().passthrough().safeParse(req.body);
+    const validation = EmployeeSchema.partial().safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
@@ -871,6 +992,9 @@ app.delete('/api/v1/employees/:id', authenticateToken, authorize(['Admin']), asy
 app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, startDate, endDate } = req.query as Record<string, string | undefined>;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(MAX_PAGE_SIZE, parseInt(req.query.limit as string) || DEFAULT_PAGE_SIZE);
+    const offset = (page - 1) * limit;
     let records: any[];
     try {
       records = await getAttendanceFromDB();
@@ -884,7 +1008,8 @@ app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Mana
     if (employeeId) records = records.filter(r => r.employeeId === employeeId);
     if (startDate) records = records.filter(r => r.date >= startDate);
     if (endDate) records = records.filter(r => r.date <= endDate);
-    res.json({ success: true, data: records, count: records.length });
+    const paginated = records.slice(offset, offset + limit);
+    res.json({ success: true, data: paginated, count: records.length, page, limit, totalPages: Math.max(1, Math.ceil(records.length / limit)) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -893,23 +1018,23 @@ app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Mana
 // PUT /api/v1/employees/bulk
 app.put('/api/v1/employees/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req: any, res: any) => {
   try {
-    // Require at minimum an id for each employee in bulk operations.
-    const BulkEmployeeSchema = EmployeeSchema.partial().passthrough().refine(e => !!e.id, { message: 'Each employee must have an id' });
+    const BulkEmployeeSchema = EmployeeSchema.partial().refine(e => !!e.id, { message: 'Each employee must have an id' });
     const validation = bulkArraySchema('employees', BulkEmployeeSchema).safeParse(req.body);
     if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
     const employees = validation.data.employees;
-    // Read existing employees and merge; don't blindly overwrite.
-    let existing: any[];
-    try {
-      existing = await getEmployeesFromDB();
-    } catch {
-      existing = getEmployeesFromLocalStore();
-    }
-    const existingMap = new Map(existing.map((e: any) => [e.id, e]));
-    for (const emp of employees) {
-      existingMap.set(emp.id, { ...(existingMap.get(emp.id) || {}), ...emp, updatedAt: new Date().toISOString() });
-    }
-    await saveEmployeesStore([...existingMap.values()]);
+    await withLock('bulk:employees', async () => {
+      let existing: any[];
+      try {
+        existing = await getEmployeesFromDB();
+      } catch {
+        existing = getEmployeesFromLocalStore();
+      }
+      const existingMap = new Map(existing.map((e: any) => [e.id, e]));
+      for (const emp of employees) {
+        existingMap.set(emp.id, { ...(existingMap.get(emp.id) || {}), ...emp, updatedAt: new Date().toISOString() });
+      }
+      await saveEmployeesStore([...existingMap.values()]);
+    });
     res.json({ success: true, count: employees.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -959,10 +1084,12 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
 // PUT /api/v1/attendance/bulk
 app.put('/api/v1/attendance/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const validation = bulkArraySchema('records', AttendanceSchema.passthrough()).safeParse((req as any).body);
+    const validation = bulkArraySchema('records', AttendanceSchema).safeParse((req as any).body);
     if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
     const records = validation.data.records;
-    await saveAttendanceToDB(records);
+    await withLock('bulk:attendance', async () => {
+      await saveAttendanceToDB(records);
+    });
     res.json({ success: true, count: records.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -975,6 +1102,9 @@ app.put('/api/v1/attendance/bulk', authenticateToken, authorize(['HR', 'Admin'])
 app.get('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { employeeId, status } = req.query as Record<string, string | undefined>;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(MAX_PAGE_SIZE, parseInt(req.query.limit as string) || DEFAULT_PAGE_SIZE);
+    const offset = (page - 1) * limit;
     let leaves: any[];
     try {
       leaves = await getLeavesFromDB();
@@ -987,7 +1117,8 @@ app.get('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin', 'Manager'
     }
     if (employeeId) leaves = leaves.filter(l => l.employeeId === employeeId);
     if (status) leaves = leaves.filter(l => l.status === status);
-    res.json({ success: true, data: leaves, count: leaves.length });
+    const paginated = leaves.slice(offset, offset + limit);
+    res.json({ success: true, data: paginated, count: leaves.length, page, limit, totalPages: Math.max(1, Math.ceil(leaves.length / limit)) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1038,10 +1169,12 @@ app.put('/api/v1/leaves/:id/approve', authenticateToken, authorize(['HR', 'Admin
 // PUT /api/v1/leaves/bulk
 app.put('/api/v1/leaves/bulk', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
-    const validation = bulkArraySchema('leaves', LeaveSchema.passthrough()).safeParse((req as any).body);
+    const validation = bulkArraySchema('leaves', LeaveSchema).safeParse((req as any).body);
     if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
     const leaves = validation.data.leaves;
-    await saveLeavesToDB(leaves);
+    await withLock('bulk:leaves', async () => {
+      await saveLeavesToDB(leaves);
+    });
     res.json({ success: true, count: leaves.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1054,6 +1187,9 @@ app.put('/api/v1/leaves/bulk', authenticateToken, authorize(['HR', 'Admin']), as
 app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const { employeeId, month } = req.query as Record<string, string | undefined>;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(MAX_PAGE_SIZE, parseInt(req.query.limit as string) || DEFAULT_PAGE_SIZE);
+    const offset = (page - 1) * limit;
     let payroll: any[];
     try {
       payroll = await getPayrollFromDB();
@@ -1066,7 +1202,8 @@ app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async 
     }
     if (employeeId) payroll = payroll.filter(p => p.employeeId === employeeId);
     if (month) payroll = payroll.filter(p => p.month === month);
-    res.json({ success: true, data: payroll, count: payroll.length });
+    const paginated = payroll.slice(offset, offset + limit);
+    res.json({ success: true, data: paginated, count: payroll.length, page, limit, totalPages: Math.max(1, Math.ceil(payroll.length / limit)) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1092,7 +1229,9 @@ app.put('/api/v1/payroll/bulk', authenticateToken, authorize(['HR', 'Admin']), a
     const validation = bulkArraySchema('records', PayrollRecordSchema).safeParse((req as any).body);
     if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
     const records = validation.data.records;
-    await savePayrollToDB(records);
+    await withLock('bulk:payroll', async () => {
+      await savePayrollToDB(records);
+    });
     res.json({ success: true, count: records.length });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1108,46 +1247,44 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
     }
 
     const { month, year } = validation.data;
-    const employees = await getEmployeesStore();
-    const attendance = await getAttendanceFromDB();
-    const payrollRecords: any[] = [];
-    
-    // Better payroll calculation using Salary Structure
-    for (const emp of employees) {
-      // Use startsWith to avoid month substring bugs (e.g. "1" matching "10", "11", "12")
-      const targetPrefix = `${year}-${String(month).padStart(2, '0')}`;
-      const empAttendance = attendance.filter(a => a.employeeId === emp.id && a.date.startsWith(targetPrefix));
-      const presentDays = empAttendance.filter(a => a.status === 'Full Day').length;
+    await withLock('payroll:run', async () => {
+      const employees = await getEmployeesStore();
+      const attendance = await getAttendanceFromDB();
+      const payrollRecords: any[] = [];
       
-      // Fetch Salary Structure asynchronously from database, fallback to local/default structure
-      const salaryStructure = await getSalaryStructureFromDB(emp.id) || getSalaryStructureByEmployee(emp.id, emp.baseSalary || 0) || {
-        totalMonthly: emp.baseSalary || 0,
-      };
+      for (const emp of employees) {
+        const targetPrefix = `${year}-${String(month).padStart(2, '0')}`;
+        const empAttendance = attendance.filter(a => a.employeeId === emp.id && a.date.startsWith(targetPrefix));
+        const presentDays = empAttendance.filter(a => a.status === 'Full Day').length;
+        
+        const salaryStructure = await getSalaryStructureFromDB(emp.id) || getSalaryStructureByEmployee(emp.id, emp.baseSalary || 0) || {
+          totalMonthly: emp.baseSalary || 0,
+        };
+        
+        const monthlyGross = salaryStructure.totalMonthly || emp.baseSalary || 0;
+        const dailyRate = monthlyGross / AVERAGE_WORKING_DAYS;
+        const netSalary = presentDays * dailyRate;
+        
+        payrollRecords.push({
+          id: `PAY-${Date.now()}-${emp.id}`,
+          employeeId: emp.id,
+          employeeName: emp.name,
+          month: `${month} ${year}`,
+          baseSalary: monthlyGross,
+          bonus: 0,
+          penalty: 0,
+          leaveDeductions: Math.max(0, (AVERAGE_WORKING_DAYS - presentDays) * dailyRate),
+          netSalary: Math.round(netSalary * 100) / 100,
+          status: 'Pending',
+          calculatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
       
-      const monthlyGross = salaryStructure.totalMonthly || emp.baseSalary || 0;
-      
-      const dailyRate = monthlyGross / AVERAGE_WORKING_DAYS;
-      const netSalary = presentDays * dailyRate;
-      
-      payrollRecords.push({
-        id: `PAY-${Date.now()}-${emp.id}`,
-        employeeId: emp.id,
-        employeeName: emp.name,
-        month: `${month} ${year}`,
-        baseSalary: monthlyGross,
-        bonus: 0,
-        penalty: 0,
-        leaveDeductions: Math.max(0, (AVERAGE_WORKING_DAYS - presentDays) * dailyRate),
-        netSalary: Math.round(netSalary * 100) / 100,
-        status: 'Pending',
-        calculatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-    }
-    
-    await savePayrollToDB(payrollRecords);
-    res.json({ success: true, data: payrollRecords, count: payrollRecords.length });
+      await savePayrollToDB(payrollRecords);
+      res.json({ success: true, data: payrollRecords, count: payrollRecords.length });
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1157,6 +1294,9 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
 
 app.get('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(MAX_PAGE_SIZE, parseInt(req.query.limit as string) || DEFAULT_PAGE_SIZE);
+    const offset = (page - 1) * limit;
     let candidates: any[];
     try {
       candidates = await getCandidatesFromDB();
@@ -1167,7 +1307,8 @@ app.get('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Mana
         throw dbError;
       }
     }
-    res.json({ success: true, data: candidates, count: candidates.length });
+    const paginated = candidates.slice(offset, offset + limit);
+    res.json({ success: true, data: paginated, count: candidates.length, page, limit, totalPages: Math.max(1, Math.ceil(candidates.length / limit)) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1488,9 +1629,7 @@ function getGeminiClient(): GoogleGenerativeAI {
 
 async function callGeminiWithRetry<T>(fn: () => Promise<T>, context: string): Promise<T> {
   let lastError: Error | null = null;
-  let attempt = 0;
   const maxRetries = 2;
-  // Match exact HTTP status codes and well-known error patterns, not substrings.
   const isRetryable = (error: any): boolean => {
     const status = error?.status || error?.code;
     if (status === 429 || status === 500 || status === 502 || status === 503) return true;
@@ -1498,19 +1637,16 @@ async function callGeminiWithRetry<T>(fn: () => Promise<T>, context: string): Pr
     return /\b(429|500|502|503|529)\b/.test(msg) || msg.includes('resource has been exhausted') || msg.includes('rate limit');
   };
   
-  while (attempt <= maxRetries) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error: any) {
       lastError = error;
-      if (isRetryable(error)) {
-        attempt++;
-        if (attempt <= maxRetries) {
-          const delay = 1000 * Math.pow(2, attempt - 1) + Math.random() * 300;
-          console.warn(`Gemini ${context} retry ${attempt} after ${delay}ms: ${error.message}`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
+      if (attempt < maxRetries && isRetryable(error)) {
+        const delay = 1000 * Math.pow(2, attempt) + Math.random() * 300;
+        console.warn(`Gemini ${context} retry ${attempt + 1} after ${delay}ms: ${error.message}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
       }
       throw error;
     }
@@ -1730,24 +1866,18 @@ Strictly output ONLY valid JSON. No markdown wrappers like \`\`\`json.`;
 function isUrlSafe(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-    // Only allow http/https
     if (!['http:', 'https:'].includes(url.protocol)) return false;
     
-    // Block localhost and private IP ranges
     const hostname = url.hostname.toLowerCase();
     if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') return false;
-    // Block link-local and private IPs (IPv4)
-    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-    const match = hostname.match(ipv4Regex);
-    if (match) {
-      const octets = match.slice(1, 5).map(Number);
+    
     const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
     const match = hostname.match(ipv4Regex);
     if (match) {
       const octets = match.slice(1, 5).map(Number);
       if (octets[0] === 169 && octets[1] === 254) return false;
-      if (octets[0] === 10 || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31 ||
-          octets[0] === 192 && octets[1] === 168) {
+      if (octets[0] === 10 || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+          (octets[0] === 192 && octets[1] === 168)) {
         console.warn(`isUrlSafe: allowing private IP ${hostname} — ensure intentional biometric device`);
       }
     }
@@ -3590,7 +3720,30 @@ import { Readable } from 'stream';
 // Configure multer to store in memory (we'll stream to Drive)
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain',
+      'text/csv',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    ];
+    const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const ext = file.originalname.toLowerCase().match(/\.[^.]+$/)?.[0] || '';
+    if (allowedMimeTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
+      return cb(null, true);
+    }
+    return cb(new Error(`File type not allowed: ${file.mimetype || ext}. Allowed types: ${allowedExtensions.join(', ')}`));
+  }
 });
 
 // POST /api/drive/upload – upload a file to Google Drive

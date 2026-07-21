@@ -33,7 +33,18 @@ function getQueue(): QueuedRequest[] {
 
 function saveQueue(queue: QueuedRequest[]): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {
+    if ((e as any).name === 'QuotaExceededError' || (e as any).code === 22 || ((e as any).message || '').toLowerCase().includes('quota')) {
+      logger.error('Offline queue lost: localStorage quota exceeded');
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('hrm:storage-quota-exceeded'));
+      }
+    } else {
+      logger.error('Failed to save offline queue:', e);
+    }
+  }
 }
 
 export function enqueueRequest(request: Omit<QueuedRequest, 'id' | 'timestamp' | 'retries'>): void {

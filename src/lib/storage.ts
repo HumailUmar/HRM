@@ -1098,6 +1098,18 @@ export const saveStatutoryDeductions = (data: StatutoryDeduction[]) => saveData<
 export const getPayrollCalculations = (): PayrollCalculation[] => loadData<PayrollCalculation[]>('payroll_calculations', []);
 export const savePayrollCalculations = (data: PayrollCalculation[]) => saveData<PayrollCalculation[]>('payroll_calculations', data);
 
+export const getSalaryComponents = (): SalaryComponent[] => loadData<SalaryComponent[]>('salary_components', []);
+export const saveSalaryComponents = (data: SalaryComponent[]) => saveData<SalaryComponent[]>('salary_components', data);
+
+export const getLeaveTypeConfigs = (): any[] => loadData<any[]>('leave_type_configs', []);
+export const saveLeaveTypeConfigs = (data: any[]) => saveData<any[]>('leave_type_configs', data);
+
+export const getPayslips = (): any[] => loadData<any[]>('payslips', []);
+export const savePayslips = (data: any[]) => saveData<any[]>('payslips', data);
+
+export const getNotifications = (): any[] => loadData<any[]>('notifications', []);
+export const saveNotifications = (data: any[]) => saveData<any[]>('notifications', data);
+
 export const getPerformanceReviewCycles = (): PerformanceReviewCycle[] => loadData<PerformanceReviewCycle[]>('review_cycles', []);
 export const savePerformanceReviewCycles = (cycles: PerformanceReviewCycle[]) => {
   saveData('review_cycles', cycles);

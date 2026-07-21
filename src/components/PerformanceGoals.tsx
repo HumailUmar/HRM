@@ -102,7 +102,7 @@ export default function PerformanceGoals({ user }: { user: UserType | null }) {
       ...g,
       targetValue: g.targetValue ?? 100,
       actualValue: g.actualValue ?? g.progress ?? 0,
-    }));
+    })));
 
     await data.savePerformanceGoal(updatedGoal);
     setQuickUpdateId(null);

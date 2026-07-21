@@ -1,127 +1,130 @@
 import { logger } from '../lib/logger';
 import { IDataAdapter } from './interfaces/IDataAdapter';
 import {
-  getEmployees,
-  saveEmployees,
-  getEmployeeDocuments,
-  saveEmployeeDocuments,
-  getAttendance,
-  saveAttendance,
-  getLeaves,
-  saveLeaves,
-  getPayroll,
-  savePayroll,
-  getCandidates,
-  saveCandidates,
-  getPerformanceReviews,
-  savePerformanceReviews,
-  getPerformanceGoals,
-  savePerformanceGoals,
-  getTrainingModules,
-  saveTrainingModules,
-  getTrainingAssignments,
-  saveTrainingAssignments,
-  getDepartments,
-  saveDepartments,
-  getDesignations,
-  saveDesignations,
-  getSettings,
-  saveSettings,
-  getBiometricDevices,
-  saveBiometricDevices,
-  addSheetLog,
-  generateEmployeeDiff,
-  addEmployeeHistory,
-  getEmployeeHistory,
-  createExitRecord,
-  getExitRecords,
-  getExitChecklistTemplates,
-  getExitInterviewTemplates,
-  getExitProcessStages,
-  saveExitProcessStages,
-  getSettlementConfig,
-  saveSettlementConfig,
-  getOnboardingTasks,
-  saveOnboardingTasks,
-  getOnboardingTemplates,
-  getJobDescriptions,
-  saveJobDescriptions,
-  getStageTemplates,
-  saveStageTemplates,
-  getInterviewPanels,
-  saveInterviewPanels,
-  getScorecards,
-  saveScorecards,
-  getJDMatches,
-  saveJDMatches,
-  getPerformanceReviewCycles,
-  savePerformanceReviewCycles,
-  getPerformanceReviewTemplates,
-  savePerformanceReviewTemplates,
-  getTrainingSubmissions,
-  saveTrainingSubmissions,
-  getPeerAssignments,
-  savePeerAssignments,
-  getTrainingRequests,
-  saveTrainingRequests,
-  getTrainingMentorships,
-  saveTrainingMentorships,
-  getTrainingCheckIns,
-  saveTrainingCheckIns,
-  getTrainingMessages,
-  saveTrainingMessages,
-  getSalaryComponents,
-  saveSalaryComponents,
-  getSalaryStructures,
-  saveSalaryStructures,
-  getPayGrades,
-  savePayGrades,
-  getSalaryRevisions,
-  saveSalaryRevisions,
-  getShifts,
-  saveShifts,
-  getShiftAssignments,
-  saveShiftAssignments,
-  getShiftSwapRequests,
-  saveShiftSwapRequests,
-  getShiftTemplates,
-  saveShiftTemplates,
-  getCurrencies,
-  saveCurrencies,
-  getTaxRules,
-  saveTaxRules,
-  getStatutoryDeductions,
-  saveStatutoryDeductions,
-  getPayrollCalculations,
-  savePayrollCalculations,
-  getLeavePolicies,
-  saveLeavePolicies,
-  getLeaveTypeConfigs,
-  getRecruitmentAnalytics,
-  saveRecruitmentAnalytics,
-  getHires,
-  saveHires,
-  getInterviewSchedules,
-  saveInterviewSchedules,
-  getOrgChartNodes,
-  saveOrgChartNodes,
-  getPayslips,
-  savePayslips,
-  getNotifications,
-  saveNotifications,
-  getUsers,
-  saveUsers,
-  getStatusHistory,
-  saveStatusHistory,
-  getSheetLogs,
-  getTrainingQuizzes,
-  saveSalaryStructure,
-  getSalaryStructureByEmployee,
-  addSalaryRevision,
-  getBiometricPunchRecords,
-  saveBiometricPunchRecords,
-  getBiometricSyncLogs,
-  saveBiometricSyncLogs,
+  getEmployees as getEmployeesLocal,
+  saveEmployees as saveEmployeesLocal,
+  getEmployeeDocuments as getEmployeeDocumentsLocal,
+  saveEmployeeDocuments as saveEmployeeDocumentsLocal,
+  getAttendance as getAttendanceLocal,
+  saveAttendance as saveAttendanceLocal,
+  getLeaves as getLeavesLocal,
+  saveLeaves as saveLeavesLocal,
+  getPayroll as getPayrollLocal,
+  savePayroll as savePayrollLocal,
+  getCandidates as getCandidatesLocal,
+  saveCandidates as saveCandidatesLocal,
+  getPerformanceReviews as getPerformanceReviewsLocal,
+  savePerformanceReviews as savePerformanceReviewsLocal,
+  getPerformanceGoals as getPerformanceGoalsLocal,
+  savePerformanceGoals as savePerformanceGoalsLocal,
+  getTrainingModules as getTrainingModulesLocal,
+  saveTrainingModules as saveTrainingModulesLocal,
+  getTrainingAssignments as getTrainingAssignmentsLocal,
+  saveTrainingAssignments as saveTrainingAssignmentsLocal,
+  getDepartments as getDepartmentsLocal,
+  saveDepartments as saveDepartmentsLocal,
+  getDesignations as getDesignationsLocal,
+  saveDesignations as saveDesignationsLocal,
+  getSettings as getSettingsLocal,
+  saveSettings as saveSettingsLocal,
+  getBiometricDevices as getBiometricDevicesLocal,
+  saveBiometricDevices as saveBiometricDevicesLocal,
+  addSheetLog as addSheetLogLocal,
+  generateEmployeeDiff as generateEmployeeDiffLocal,
+  addEmployeeHistory as addEmployeeHistoryLocal,
+  getEmployeeHistory as getEmployeeHistoryLocal,
+  createExitRecord as createExitRecordLocal,
+  getExitRecords as getExitRecordsLocal,
+  getExitChecklistTemplates as getExitChecklistTemplatesLocal,
+  getExitInterviewTemplates as getExitInterviewTemplatesLocal,
+  getExitProcessStages as getExitProcessStagesLocal,
+  saveExitProcessStages as saveExitProcessStagesLocal,
+  getSettlementConfig as getSettlementConfigLocal,
+  saveSettlementConfig as saveSettlementConfigLocal,
+  getOnboardingTasks as getOnboardingTasksLocal,
+  getOnboardingTemplates as getOnboardingTemplatesLocal,
+  getJobDescriptions as getJobDescriptionsLocal,
+  saveJobDescriptions as saveJobDescriptionsLocal,
+  getStageTemplates as getStageTemplatesLocal,
+  saveStageTemplates as saveStageTemplatesLocal,
+  getInterviewPanels as getInterviewPanelsLocal,
+  saveInterviewPanels as saveInterviewPanelsLocal,
+  getScorecards as getScorecardsLocal,
+  saveScorecards as saveScorecardsLocal,
+  getJDMatches as getJDMatchesLocal,
+  saveJDMatches as saveJDMatchesLocal,
+  getPerformanceReviewCycles as getPerformanceReviewCyclesLocal,
+  savePerformanceReviewCycles as savePerformanceReviewCyclesLocal,
+  getPerformanceReviewTemplates as getPerformanceReviewTemplatesLocal,
+  savePerformanceReviewTemplates as savePerformanceReviewTemplatesLocal,
+  getTrainingSubmissions as getTrainingSubmissionsLocal,
+  saveTrainingSubmissions as saveTrainingSubmissionsLocal,
+  getPeerAssignments as getPeerAssignmentsLocal,
+  savePeerAssignments as savePeerAssignmentsLocal,
+  getTrainingRequests as getTrainingRequestsLocal,
+  saveTrainingRequests as saveTrainingRequestsLocal,
+  getTrainingMentorships as getTrainingMentorshipsLocal,
+  saveTrainingMentorships as saveTrainingMentorshipsLocal,
+  getTrainingCheckIns as getTrainingCheckInsLocal,
+  saveTrainingCheckIns as saveTrainingCheckInsLocal,
+  getTrainingMessages as getTrainingMessagesLocal,
+  saveTrainingMessages as saveTrainingMessagesLocal,
+  getSalaryComponents as getSalaryComponentsLocal,
+  saveSalaryComponents as saveSalaryComponentsLocal,
+  getSalaryStructures as getSalaryStructuresLocal,
+  saveSalaryStructures as saveSalaryStructuresLocal,
+  getPayGrades as getPayGradesLocal,
+  savePayGrades as savePayGradesLocal,
+  getSalaryRevisions as getSalaryRevisionsLocal,
+  saveSalaryRevisions as saveSalaryRevisionsLocal,
+  getShifts as getShiftsLocal,
+  saveShifts as saveShiftsLocal,
+  getShiftAssignments as getShiftAssignmentsLocal,
+  saveShiftAssignments as saveShiftAssignmentsLocal,
+  getShiftSwapRequests as getShiftSwapRequestsLocal,
+  saveShiftSwapRequests as saveShiftSwapRequestsLocal,
+  getShiftTemplates as getShiftTemplatesLocal,
+  saveShiftTemplates as saveShiftTemplatesLocal,
+  getCurrencies as getCurrenciesLocal,
+  saveCurrencies as saveCurrenciesLocal,
+  getTaxRules as getTaxRulesLocal,
+  saveTaxRules as saveTaxRulesLocal,
+  getStatutoryDeductions as getStatutoryDeductionsLocal,
+  saveStatutoryDeductions as saveStatutoryDeductionsLocal,
+  getPayrollCalculations as getPayrollCalculationsLocal,
+  savePayrollCalculations as savePayrollCalculationsLocal,
+  getLeavePolicies as getLeavePoliciesLocal,
+  saveLeavePolicies as saveLeavePoliciesLocal,
+  getLeaveTypeConfigs as getLeaveTypeConfigsLocal,
+  saveLeaveTypeConfigs as saveLeaveTypeConfigsLocal,
+  getRecruitmentAnalytics as getRecruitmentAnalyticsLocal,
+  saveRecruitmentAnalytics as saveRecruitmentAnalyticsLocal,
+  getHires as getHiresLocal,
+  saveHires as saveHiresLocal,
+  getInterviewSchedules as getInterviewSchedulesLocal,
+  saveInterviewSchedules as saveInterviewSchedulesLocal,
+  getOrgChartNodes as getOrgChartNodesLocal,
+  saveOrgChartNodes as saveOrgChartNodesLocal,
+  getPayslips as getPayslipsLocal,
+  savePayslips as savePayslipsLocal,
+  getNotifications as getNotificationsLocal,
+  saveNotifications as saveNotificationsLocal,
+  getUsers as getUsersLocal,
+  saveUsers as saveUsersLocal,
+  getStatusHistory as getStatusHistoryLocal,
+  saveStatusHistory as saveStatusHistoryLocal,
+  getSheetLogs as getSheetLogsLocal,
+  getTrainingQuizzes as getTrainingQuizzesLocal,
+  saveSalaryStructure as saveSalaryStructureLocal,
+  getSalaryStructureByEmployee as getSalaryStructureByEmployeeLocal,
+  addSalaryRevision as addSalaryRevisionLocal,
+  getBiometricPunchRecords as getBiometricPunchRecordsLocal,
+  saveBiometricPunchRecords as saveBiometricPunchRecordsLocal,
+  getBiometricSyncLogs as getBiometricSyncLogsLocal,
+  saveBiometricSyncLogs as saveBiometricSyncLogsLocal,
+  getSuccessionPlans as getSuccessionPlansLocal,
+  saveSuccessionPlans as saveSuccessionPlansLocal,
+  saveOnboardingTasks as saveOnboardingTasksLocal,
 } from '../lib/storage';
 import { DEFAULT_SETTINGS } from '../lib/mockData';
 import {
@@ -182,313 +185,314 @@ import {
   TrainingQuiz,
   BiometricPunchRecord,
   BiometricSyncLog,
+  SuccessionPlan,
 } from '../types';
 
 export class LocalStorageAdapter implements IDataAdapter {
   // EMPLOYEE
   async getEmployees(): Promise<Employee[]> {
-    return getEmployees();
+    return getEmployeesLocal();
   }
 
   async getEmployee(id: string): Promise<Employee | null> {
-    const employees = getEmployees();
+    const employees = getEmployeesLocal();
     return employees.find((e) => e.id === id) || null;
   }
 
   async saveEmployee(employee: Employee): Promise<Employee> {
-    const employees = getEmployees();
+    const employees = getEmployeesLocal();
     const index = employees.findIndex((e) => e.id === employee.id);
     if (index >= 0) employees[index] = employee;
     else employees.push(employee);
-    await saveEmployees(employees);
+    await saveEmployeesLocal(employees);
     return employee;
   }
 
   async saveEmployees(employees: Employee[]): Promise<void> {
-    await saveEmployees(employees);
+    await saveEmployeesLocal(employees);
   }
 
   async deleteEmployee(id: string): Promise<void> {
-    const employees = getEmployees();
-    await saveEmployees(employees.filter((e) => e.id !== id));
+    const employees = getEmployeesLocal();
+    await saveEmployeesLocal(employees.filter((e) => e.id !== id));
   }
 
   // ATTENDANCE
   async getAttendance(): Promise<AttendanceRecord[]> {
-    return getAttendance();
+    return getAttendanceLocal();
   }
 
   async getAttendanceByEmployee(employeeId: string): Promise<AttendanceRecord[]> {
-    return getAttendance().filter((a) => a.employeeId === employeeId);
+    return getAttendanceLocal().filter((a) => a.employeeId === employeeId);
   }
 
   async saveAttendance(records: AttendanceRecord[]): Promise<void> {
-    await saveAttendance(records);
+    await saveAttendanceLocal(records);
   }
 
   async saveAttendanceRecord(record: AttendanceRecord): Promise<void> {
-    const records = getAttendance();
+    const records = getAttendanceLocal();
     const index = records.findIndex((r) => r.id === record.id);
     if (index >= 0) records[index] = record;
     else records.push(record);
-    await saveAttendance(records);
+    await saveAttendanceLocal(records);
   }
 
   // LEAVE
   async getLeaves(): Promise<LeaveRecord[]> {
-    return getLeaves();
+    return getLeavesLocal();
   }
 
   async getLeavesByEmployee(employeeId: string): Promise<LeaveRecord[]> {
-    return getLeaves().filter((l) => l.employeeId === employeeId);
+    return getLeavesLocal().filter((l) => l.employeeId === employeeId);
   }
 
   async saveLeave(leave: LeaveRecord): Promise<void> {
-    const leaves = getLeaves();
+    const leaves = getLeavesLocal();
     const index = leaves.findIndex((l) => l.id === leave.id);
     if (index >= 0) leaves[index] = leave;
     else leaves.push(leave);
-    await saveLeaves(leaves);
+    await saveLeavesLocal(leaves);
   }
 
   async saveLeaves(leaves: LeaveRecord[]): Promise<void> {
-    await saveLeaves(leaves);
+    await saveLeavesLocal(leaves);
   }
 
   // PAYROLL
   async getPayroll(): Promise<PayrollRecord[]> {
-    return getPayroll();
+    return getPayrollLocal();
   }
 
   async getPayrollByEmployee(employeeId: string): Promise<PayrollRecord[]> {
-    return getPayroll().filter((p) => p.employeeId === employeeId);
+    return getPayrollLocal().filter((p) => p.employeeId === employeeId);
   }
 
   async savePayroll(records: PayrollRecord[]): Promise<void> {
-    await savePayroll(records);
+    await savePayrollLocal(records);
   }
 
   // RECRUITMENT
   async getCandidates(): Promise<Candidate[]> {
-    return getCandidates();
+    return getCandidatesLocal();
   }
 
   async saveCandidate(candidate: Candidate): Promise<void> {
-    const candidates = getCandidates();
+    const candidates = getCandidatesLocal();
     const index = candidates.findIndex((c) => c.id === candidate.id);
     if (index >= 0) candidates[index] = candidate;
     else candidates.push(candidate);
-    await saveCandidates(candidates);
+    await saveCandidatesLocal(candidates);
   }
 
   async saveCandidates(candidates: Candidate[]): Promise<void> {
-    await saveCandidates(candidates);
+    await saveCandidatesLocal(candidates);
   }
 
   // PERFORMANCE
   async getPerformanceReviews(): Promise<PerformanceReview[]> {
-    return getPerformanceReviews();
+    return getPerformanceReviewsLocal();
   }
 
   async savePerformanceReview(review: PerformanceReview): Promise<void> {
-    const reviews = getPerformanceReviews();
+    const reviews = getPerformanceReviewsLocal();
     const index = reviews.findIndex((r) => r.id === review.id);
     if (index >= 0) reviews[index] = review;
     else reviews.push(review);
-    await savePerformanceReviews(reviews);
+    await savePerformanceReviewsLocal(reviews);
   }
 
   async savePerformanceReviews(reviews: PerformanceReview[]): Promise<void> {
-    await savePerformanceReviews(reviews);
+    await savePerformanceReviewsLocal(reviews);
   }
 
   async getPerformanceGoals(): Promise<PerformanceGoal[]> {
-    return getPerformanceGoals();
+    return getPerformanceGoalsLocal();
   }
 
   async savePerformanceGoal(goal: PerformanceGoal): Promise<void> {
-    const goals = getPerformanceGoals();
+    const goals = getPerformanceGoalsLocal();
     const index = goals.findIndex((g) => g.id === goal.id);
     if (index >= 0) goals[index] = goal;
     else goals.push(goal);
-    await savePerformanceGoals(goals);
+    await savePerformanceGoalsLocal(goals);
   }
 
   async savePerformanceGoals(goals: PerformanceGoal[]): Promise<void> {
-    await savePerformanceGoals(goals);
+    await savePerformanceGoalsLocal(goals);
   }
 
   // TRAINING
   async getTrainingModules(): Promise<TrainingModule[]> {
-    return getTrainingModules();
+    return getTrainingModulesLocal();
   }
 
   async saveTrainingModule(module: TrainingModule): Promise<void> {
-    const modules = getTrainingModules();
+    const modules = getTrainingModulesLocal();
     const index = modules.findIndex((m) => m.id === module.id);
     if (index >= 0) modules[index] = module;
     else modules.push(module);
-    await saveTrainingModules(modules);
+    await saveTrainingModulesLocal(modules);
   }
 
   async saveTrainingModules(modules: TrainingModule[]): Promise<void> {
-    await saveTrainingModules(modules);
+    await saveTrainingModulesLocal(modules);
   }
 
   async getTrainingAssignments(): Promise<TrainingAssignment[]> {
-    return getTrainingAssignments();
+    return getTrainingAssignmentsLocal();
   }
 
   async saveTrainingAssignment(assignment: TrainingAssignment): Promise<void> {
-    const assignments = getTrainingAssignments();
+    const assignments = getTrainingAssignmentsLocal();
     const index = assignments.findIndex((a) => a.id === assignment.id);
     if (index >= 0) assignments[index] = assignment;
     else assignments.push(assignment);
-    await saveTrainingAssignments(assignments);
+    await saveTrainingAssignmentsLocal(assignments);
   }
 
   async saveTrainingAssignments(assignments: TrainingAssignment[]): Promise<void> {
-    await saveTrainingAssignments(assignments);
+    await saveTrainingAssignmentsLocal(assignments);
   }
 
   async getTrainingQuizzes(): Promise<TrainingQuiz[]> {
-    return getTrainingQuizzes();
+    return getTrainingQuizzesLocal();
   }
 
   // DOCUMENTS
   async getDocuments(): Promise<EmployeeDocument[]> {
-    return getEmployeeDocuments();
+    return getEmployeeDocumentsLocal();
   }
 
   async saveDocument(document: EmployeeDocument): Promise<void> {
-    const docs = getEmployeeDocuments();
+    const docs = getEmployeeDocumentsLocal();
     const index = docs.findIndex((d) => d.id === document.id);
     if (index >= 0) docs[index] = document;
     else docs.push(document);
-    await saveEmployeeDocuments(docs);
+    await saveEmployeeDocumentsLocal(docs);
   }
 
   async getEmployeeDocuments(): Promise<EmployeeDocument[]> {
-    return getEmployeeDocuments();
+    return getEmployeeDocumentsLocal();
   }
 
   async getEmployeeDocumentsByEmployee(employeeId: string): Promise<EmployeeDocument[]> {
-    const docs = getEmployeeDocuments();
+    const docs = getEmployeeDocumentsLocal();
     return docs.filter(d => d.employeeId === employeeId);
   }
 
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
-    await saveEmployeeDocuments(docs);
+    await saveEmployeeDocumentsLocal(docs);
   }
 
   // JOB DESCRIPTIONS / ONBOARDING
   async getJobDescriptions(): Promise<JobDescription[]> {
-    return getJobDescriptions();
+    return getJobDescriptionsLocal();
   }
 
   async saveJobDescriptions(jobs: JobDescription[]): Promise<void> {
-    saveJobDescriptions(jobs);
+    await saveJobDescriptionsLocal(jobs);
   }
 
   async getOnboardingTasks(): Promise<LegacyOnboardingTask[]> {
-    return getOnboardingTasks();
+    return getOnboardingTasksLocal();
   }
 
   async getOnboardingTemplates(): Promise<OnboardingTemplate[]> {
-    return getOnboardingTemplates();
+    return getOnboardingTemplatesLocal();
   }
 
   // DEPARTMENTS & DESIGNATIONS
   async getDepartments(): Promise<Department[]> {
-    return getDepartments();
+    return getDepartmentsLocal();
   }
 
   async saveDepartment(department: Department): Promise<void> {
-    const departments = getDepartments();
+    const departments = getDepartmentsLocal();
     const index = departments.findIndex((d) => d.id === department.id);
     if (index >= 0) departments[index] = department;
     else departments.push(department);
-    saveDepartments(departments);
+    await saveDepartmentsLocal(departments);
   }
 
   async getDesignations(): Promise<Designation[]> {
-    return getDesignations();
+    return getDesignationsLocal();
   }
 
   async saveDesignation(designation: Designation): Promise<void> {
-    const designations = getDesignations();
+    const designations = getDesignationsLocal();
     const index = designations.findIndex((d) => d.id === designation.id);
     if (index >= 0) designations[index] = designation;
     else designations.push(designation);
-    saveDesignations(designations);
+    await saveDesignationsLocal(designations);
   }
 
   // SETTINGS
   async getSettings(): Promise<AppSettings> {
-    const settings = getSettings();
+    const settings = getSettingsLocal();
     return settings ?? DEFAULT_SETTINGS;
   }
 
   async saveSettings(settings: AppSettings): Promise<void> {
-    await saveSettings(settings);
+    await saveSettingsLocal(settings);
   }
 
   // BIOMETRIC DEVICES
   getBiometricDevices(): BiometricDeviceConfig[] {
-    return getBiometricDevices();
+    return getBiometricDevicesLocal();
   }
 
   saveBiometricDevices(devices: BiometricDeviceConfig[]): void {
-    saveBiometricDevices(devices);
+    saveBiometricDevicesLocal(devices);
   }
 
   async getBiometricPunchRecords(): Promise<BiometricPunchRecord[]> {
-    return getBiometricPunchRecords();
+    return getBiometricPunchRecordsLocal();
   }
 
   async saveBiometricPunchRecords(records: BiometricPunchRecord[]): Promise<void> {
-    await saveBiometricPunchRecords(records);
+    await saveBiometricPunchRecordsLocal(records);
   }
 
   async getBiometricSyncLogs(): Promise<BiometricSyncLog[]> {
-    return getBiometricSyncLogs();
+    return getBiometricSyncLogsLocal();
   }
 
   async saveBiometricSyncLogs(logs: BiometricSyncLog[]): Promise<void> {
-    await saveBiometricSyncLogs(logs);
+    await saveBiometricSyncLogsLocal(logs);
   }
 
   // RECRUITMENT HELPERS
   async getStageTemplates(): Promise<StageTemplate[]> {
-    return getStageTemplates();
+    return getStageTemplatesLocal();
   }
 
   async saveStageTemplates(templates: StageTemplate[]): Promise<void> {
-    await saveStageTemplates(templates);
+    await saveStageTemplatesLocal(templates);
   }
 
   async getInterviewPanels(): Promise<InterviewPanel[]> {
-    return getInterviewPanels();
+    return getInterviewPanelsLocal();
   }
 
   async saveInterviewPanels(panels: InterviewPanel[]): Promise<void> {
-    await saveInterviewPanels(panels);
+    await saveInterviewPanelsLocal(panels);
   }
 
   async getScorecards(): Promise<EvaluationScorecard[]> {
-    return getScorecards();
+    return getScorecardsLocal();
   }
 
   async saveScorecards(scorecards: EvaluationScorecard[]): Promise<void> {
-    await saveScorecards(scorecards);
+    await saveScorecardsLocal(scorecards);
   }
 
   async getJDMatches(): Promise<JDResumeMatch[]> {
-    return getJDMatches();
+    return getJDMatchesLocal();
   }
 
   async saveJDMatches(matches: JDResumeMatch[]): Promise<void> {
-    await saveJDMatches(matches);
+    await saveJDMatchesLocal(matches);
   }
 
   // STORAGE HELPERS / LOGGING
@@ -497,7 +501,7 @@ export class LocalStorageAdapter implements IDataAdapter {
     action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC',
     rowData: object,
   ): Promise<void> {
-    await addSheetLog(sheetName, action, rowData);
+    await addSheetLogLocal(sheetName, action, rowData);
   }
 
   generateEmployeeDiff(
@@ -510,7 +514,7 @@ export class LocalStorageAdapter implements IDataAdapter {
     reason?: string,
     notes?: string,
   ): any {
-    return generateEmployeeDiff(oldEmp, newEmp, changedBy, changedByName, changeType, source, reason, notes);
+    return generateEmployeeDiffLocal(oldEmp, newEmp, changedBy, changedByName, changeType, source, reason, notes);
   }
 
   async uploadFile(file: File, _folderId: string): Promise<string> {
@@ -522,311 +526,333 @@ export class LocalStorageAdapter implements IDataAdapter {
 
   // HISTORY & EXIT
   async addEmployeeHistory(entry: EmployeeHistoryEntry): Promise<void> {
-    await addEmployeeHistory([entry]);
+    await addEmployeeHistoryLocal([entry]);
   }
 
   async getEmployeeHistory(employeeId: string): Promise<EmployeeHistoryEntry[]> {
-    return getEmployeeHistory().filter((entry) => entry.employeeId === employeeId);
+    return getEmployeeHistoryLocal().filter((entry) => entry.employeeId === employeeId);
   }
 
   async createExitRecord(record: ExitRecord): Promise<void> {
-    await createExitRecord(record);
+    await createExitRecordLocal(record);
   }
 
   async getExitRecords(): Promise<ExitRecord[]> {
-    return getExitRecords();
+    return getExitRecordsLocal();
+  }
+
+  async saveExitRecords(records: ExitRecord[]): Promise<void> {
+    await saveExitRecordsLocal(records);
   }
 
   // EXIT TEMPLATES
   async getExitChecklistTemplates(): Promise<ExitChecklistTemplate[]> {
-    return getExitChecklistTemplates();
+    return getExitChecklistTemplatesLocal();
   }
 
   async getExitInterviewTemplates(): Promise<ExitInterviewTemplate[]> {
-    return getExitInterviewTemplates();
+    return getExitInterviewTemplatesLocal();
   }
 
   async getExitProcessStages(): Promise<ExitProcessStage[]> {
-    return getExitProcessStages();
+    return getExitProcessStagesLocal();
   }
 
   async saveExitProcessStages(stages: ExitProcessStage[]): Promise<void> {
-    await saveExitProcessStages(stages);
+    await saveExitProcessStagesLocal(stages);
   }
 
   async getSettlementConfig(): Promise<SettlementConfig | null> {
-    return getSettlementConfig();
+    return getSettlementConfigLocal();
   }
 
   async saveSettlementConfig(config: SettlementConfig): Promise<void> {
-    await saveSettlementConfig(config);
+    await saveSettlementConfigLocal(config);
   }
 
   async getPerformanceReviewCycles(): Promise<PerformanceReviewCycle[]> {
-    return getPerformanceReviewCycles();
+    return getPerformanceReviewCyclesLocal();
   }
 
   async savePerformanceReviewCycles(cycles: PerformanceReviewCycle[]): Promise<void> {
-    await savePerformanceReviewCycles(cycles);
+    await savePerformanceReviewCyclesLocal(cycles);
   }
 
   async getPerformanceReviewTemplates(): Promise<PerformanceReviewTemplate[]> {
-    return getPerformanceReviewTemplates();
+    return getPerformanceReviewTemplatesLocal();
   }
 
   async savePerformanceReviewTemplates(templates: PerformanceReviewTemplate[]): Promise<void> {
-    await savePerformanceReviewTemplates(templates);
+    await savePerformanceReviewTemplatesLocal(templates);
   }
 
   async getTrainingSubmissions(): Promise<TrainingSubmission[]> {
-    return getTrainingSubmissions();
+    return getTrainingSubmissionsLocal();
   }
 
   async saveTrainingSubmissions(submissions: TrainingSubmission[]): Promise<void> {
-    await saveTrainingSubmissions(submissions);
+    await saveTrainingSubmissionsLocal(submissions);
   }
 
   async getPeerAssignments(): Promise<PeerAssignment[]> {
-    return getPeerAssignments();
+    return getPeerAssignmentsLocal();
   }
 
   async savePeerAssignments(assignments: PeerAssignment[]): Promise<void> {
-    await savePeerAssignments(assignments);
+    await savePeerAssignmentsLocal(assignments);
   }
 
   async getTrainingRequests(): Promise<TrainingRequest[]> {
-    return getTrainingRequests();
+    return getTrainingRequestsLocal();
   }
 
   async saveTrainingRequests(requests: TrainingRequest[]): Promise<void> {
-    await saveTrainingRequests(requests);
+    await saveTrainingRequestsLocal(requests);
   }
 
   async getTrainingMentorships(): Promise<TrainingMentorship[]> {
-    return getTrainingMentorships();
+    return getTrainingMentorshipsLocal();
   }
 
   async saveTrainingMentorships(mentorships: TrainingMentorship[]): Promise<void> {
-    await saveTrainingMentorships(mentorships);
+    await saveTrainingMentorshipsLocal(mentorships);
   }
 
   async getTrainingCheckIns(): Promise<TrainingCheckIn[]> {
-    return getTrainingCheckIns();
+    return getTrainingCheckInsLocal();
   }
 
   async saveTrainingCheckIns(checkIns: TrainingCheckIn[]): Promise<void> {
-    await saveTrainingCheckIns(checkIns);
+    await saveTrainingCheckInsLocal(checkIns);
   }
 
   async getTrainingMessages(): Promise<TrainingMessage[]> {
-    return getTrainingMessages();
+    return getTrainingMessagesLocal();
   }
 
   async saveTrainingMessages(messages: TrainingMessage[]): Promise<void> {
-    await saveTrainingMessages(messages);
+    await saveTrainingMessagesLocal(messages);
   }
 
   async getSalaryComponents(): Promise<SalaryComponent[]> {
-    return getSalaryComponents();
+    return getSalaryComponentsLocal();
   }
 
   async saveSalaryComponents(components: SalaryComponent[]): Promise<void> {
-    await saveSalaryComponents(components);
+    await saveSalaryComponentsLocal(components);
   }
 
   async getSalaryStructures(): Promise<SalaryStructure[]> {
-    return getSalaryStructures();
+    return getSalaryStructuresLocal();
   }
 
   async saveSalaryStructures(structures: SalaryStructure[]): Promise<void> {
-    await saveSalaryStructures(structures);
+    await saveSalaryStructuresLocal(structures);
   }
 
   async getPayGrades(): Promise<PayGrade[]> {
-    return getPayGrades();
+    return getPayGradesLocal();
   }
 
   async savePayGrades(payGrades: PayGrade[]): Promise<void> {
-    await savePayGrades(payGrades);
+    await savePayGradesLocal(payGrades);
   }
 
   async getSalaryRevisions(): Promise<SalaryRevision[]> {
-    return getSalaryRevisions();
+    return getSalaryRevisionsLocal();
   }
 
   async saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void> {
-    await saveSalaryRevisions(revisions);
+    await saveSalaryRevisionsLocal(revisions);
   }
 
   async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
-    const revisions = getSalaryRevisions();
+    const revisions = getSalaryRevisionsLocal();
     return revisions.filter(r => r.employeeId === employeeId);
   }
 
   async saveSalaryStructure(structure: SalaryStructure): Promise<void> {
-    const structures = getSalaryStructures();
+    const structures = getSalaryStructuresLocal();
     const index = structures.findIndex((s) => s.employeeId === structure.employeeId);
     if (index >= 0) structures[index] = structure;
     else structures.push(structure);
-    await saveSalaryStructures(structures);
+    await saveSalaryStructuresLocal(structures);
   }
 
   async getSalaryStructureByEmployee(employeeId: string): Promise<SalaryStructure | null> {
-    return getSalaryStructureByEmployee(employeeId);
+    return getSalaryStructureByEmployeeLocal(employeeId);
   }
 
   async addSalaryRevision(revision: SalaryRevision): Promise<void> {
-    const revisions = getSalaryRevisions();
+    const revisions = getSalaryRevisionsLocal();
     revisions.push(revision);
-    await saveSalaryRevisions(revisions);
+    await saveSalaryRevisionsLocal(revisions);
   }
 
   async getShifts(): Promise<Shift[]> {
-    return getShifts();
+    return getShiftsLocal();
   }
 
   async saveShifts(shifts: Shift[]): Promise<void> {
-    await saveShifts(shifts);
+    await saveShiftsLocal(shifts);
   }
 
   async getShiftAssignments(): Promise<ShiftAssignment[]> {
-    return getShiftAssignments();
+    return getShiftAssignmentsLocal();
   }
 
   async saveShiftAssignments(assignments: ShiftAssignment[]): Promise<void> {
-    await saveShiftAssignments(assignments);
+    await saveShiftAssignmentsLocal(assignments);
   }
 
   async getShiftSwapRequests(): Promise<ShiftSwapRequest[]> {
-    return getShiftSwapRequests();
+    return getShiftSwapRequestsLocal();
   }
 
   async saveShiftSwapRequests(requests: ShiftSwapRequest[]): Promise<void> {
-    await saveShiftSwapRequests(requests);
+    await saveShiftSwapRequestsLocal(requests);
   }
 
   async getShiftTemplates(): Promise<ShiftTemplate[]> {
-    return getShiftTemplates();
+    return getShiftTemplatesLocal();
   }
 
   async saveShiftTemplates(templates: ShiftTemplate[]): Promise<void> {
-    await saveShiftTemplates(templates);
+    await saveShiftTemplatesLocal(templates);
   }
 
   async getCurrencies(): Promise<Currency[]> {
-    return getCurrencies();
+    return getCurrenciesLocal();
   }
 
   async saveCurrencies(currencies: Currency[]): Promise<void> {
-    await saveCurrencies(currencies);
+    await saveCurrenciesLocal(currencies);
   }
 
   async getTaxRules(): Promise<TaxRule[]> {
-    return getTaxRules();
+    return getTaxRulesLocal();
   }
 
   async saveTaxRules(rules: TaxRule[]): Promise<void> {
-    await saveTaxRules(rules);
+    await saveTaxRulesLocal(rules);
   }
 
   async getStatutoryDeductions(): Promise<StatutoryDeduction[]> {
-    return getStatutoryDeductions();
+    return getStatutoryDeductionsLocal();
   }
 
   async saveStatutoryDeductions(deductions: StatutoryDeduction[]): Promise<void> {
-    await saveStatutoryDeductions(deductions);
+    await saveStatutoryDeductionsLocal(deductions);
   }
 
   async getPayrollCalculations(): Promise<PayrollCalculation[]> {
-    return getPayrollCalculations();
+    return getPayrollCalculationsLocal();
   }
 
   async savePayrollCalculations(calculations: PayrollCalculation[]): Promise<void> {
-    await savePayrollCalculations(calculations);
+    await savePayrollCalculationsLocal(calculations);
   }
 
   async getLeavePolicies(): Promise<LeavePolicy[]> {
-    return getLeavePolicies();
+    return getLeavePoliciesLocal();
   }
 
   async saveLeavePolicies(policies: LeavePolicy[]): Promise<void> {
-    await saveLeavePolicies(policies);
+    await saveLeavePoliciesLocal(policies);
   }
 
   async getLeaveTypeConfigs(): Promise<any[]> {
-    return getLeaveTypeConfigs();
+    return getLeaveTypeConfigsLocal();
   }
 
   async saveLeaveTypeConfigs(configs: any[]): Promise<void> {
-    await saveLeaveTypeConfigs(configs);
+    await saveLeaveTypeConfigsLocal(configs);
   }
 
   async getRecruitmentAnalytics(): Promise<RecruitmentAnalytics[]> {
-    return getRecruitmentAnalytics();
+    return getRecruitmentAnalyticsLocal();
   }
 
   async saveRecruitmentAnalytics(analytics: RecruitmentAnalytics[]): Promise<void> {
-    await saveRecruitmentAnalytics(analytics);
+    await saveRecruitmentAnalyticsLocal(analytics);
   }
 
   async getHires(): Promise<HireDetails[]> {
-    return getHires();
+    return getHiresLocal();
   }
 
   async saveHires(hires: HireDetails[]): Promise<void> {
-    await saveHires(hires);
+    await saveHiresLocal(hires);
   }
 
   async getInterviewSchedules(): Promise<InterviewSchedule[]> {
-    return getInterviewSchedules();
+    return getInterviewSchedulesLocal();
   }
 
   async saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void> {
-    await saveInterviewSchedules(schedules);
+    await saveInterviewSchedulesLocal(schedules);
   }
 
   async getOrgChartNodes(): Promise<OrgChartNode[]> {
-    return getOrgChartNodes();
+    return getOrgChartNodesLocal();
   }
 
   async saveOrgChartNodes(nodes: OrgChartNode[]): Promise<void> {
-    await saveOrgChartNodes(nodes);
+    await saveOrgChartNodesLocal(nodes);
   }
 
   async getPayslips(): Promise<any[]> {
-    return getPayslips();
+    return getPayslipsLocal();
   }
 
   async savePayslips(payslips: any[]): Promise<void> {
-    await savePayslips(payslips);
+    await savePayslipsLocal(payslips);
   }
 
   async getNotifications(): Promise<any[]> {
-    return getNotifications();
+    return getNotificationsLocal();
   }
 
   async saveNotifications(notifications: any[]): Promise<void> {
-    await saveNotifications(notifications);
+    await saveNotificationsLocal(notifications);
   }
 
   async getUsers(): Promise<any[]> {
-    return getUsers();
+    return getUsersLocal();
   }
 
   async saveUsers(users: any[]): Promise<void> {
-    await saveUsers(users);
+    await saveUsersLocal(users);
   }
 
   async getStatusHistory(): Promise<EmployeeStatusHistory[]> {
-    return getStatusHistory();
+    return getStatusHistoryLocal();
   }
 
   async saveStatusHistory(history: EmployeeStatusHistory[]): Promise<void> {
-    await saveStatusHistory(history);
+    await saveStatusHistoryLocal(history);
   }
 
   async getSheetLogs(): Promise<SheetLog[]> {
-    return getSheetLogs();
+    return getSheetLogsLocal();
+  }
+
+  // ONBOARDING
+  async getOnboardingTasks(): Promise<LegacyOnboardingTask[]> {
+    return getOnboardingTasksLocal();
+  }
+
+  async saveOnboardingTasks(tasks: LegacyOnboardingTask[]): Promise<void> {
+    await saveOnboardingTasksLocal(tasks);
+  }
+
+  // SUCCESSION
+  async getSuccessionPlans(): Promise<SuccessionPlan[]> {
+    return getSuccessionPlansLocal();
+  }
+
+  async saveSuccessionPlans(plans: SuccessionPlan[]): Promise<void> {
+    await saveSuccessionPlansLocal(plans);
   }
 
   // SYNC

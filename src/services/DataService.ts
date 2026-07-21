@@ -567,6 +567,10 @@ export class DataService {
     return this.getAdapter().getExitRecords();
   }
 
+  async saveExitRecords(records: ExitRecord[]): Promise<void> {
+    return this.getAdapter().saveExitRecords(records);
+  }
+
   // ---- Exit Templates ----
   async getExitChecklistTemplates(): Promise<ExitChecklistTemplate[]> {
     return this.getAdapter().getExitChecklistTemplates();
