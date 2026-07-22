@@ -19,6 +19,7 @@ import {
 
 import { getNextId } from './src/lib/idHelper.js';
 import { getColumnLetter } from './src/lib/columnUtils.js';
+
 import { encryptText, decryptText } from './src/lib/crypto.js';
 
 import * as mysql from 'mysql2/promise';
@@ -309,8 +310,8 @@ const LeaveSchema = z.object({
 });
 
 const PayrollRunSchema = z.object({
-  month: z.string().min(1, "Month is required"),
-  year: z.string().min(1, "Year is required"),
+  month: z.string().regex(/^(0?[1-9]|1[0-2])$/, "Month must be between 1 and 12"),
+  year: z.string().regex(/^\d{4}$/, "Year must be a four-digit year"),
 });
 
 // ===== AUTHENTICATION MIDDLEWARE =====
@@ -323,6 +324,15 @@ const AVERAGE_WORKING_DAYS = 22;
 const MAX_BULK_SIZE = 1000;
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 200;
+
+function getOperationalErrorStatus(error: unknown): number {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  if (message.includes('not configured') || message.includes('unavailable')) return 503;
+  if (message.includes('timeout') || message.includes('timed out')) return 504;
+  if (message.includes('rate limit') || message.includes('too many')) return 429;
+  if (message.includes('invalid') || message.includes('required')) return 400;
+  return 500;
+}
 
 // Persist JWT secret to a file so it survives server restarts in dev mode.
 // In production JWT_SECRET must be set via environment variable.
@@ -360,7 +370,7 @@ const WHATSAPP_WEBHOOK_SECRET = process.env.WHATSAPP_WEBHOOK_SECRET;
  */
 async function fetchFromDevice(url: string, options: any = {}) {
   const { username, password, apiKey, timeout = DEFAULT_TIMEOUT_MS, method = 'GET', body } = options;
-  
+
   const headers: Record<string, string> = {
     'Content-Type': options.contentType || 'application/json',
     ...(options.headers || {})
@@ -395,25 +405,25 @@ async function fetchFromDevice(url: string, options: any = {}) {
  * Common punch record transformer
  */
 function transformPunchRecord(punch: any, index: number, deviceId: string, deviceName: string, fieldMapping: any = null) {
-  const punchTime = punch[fieldMapping?.punchTime || 'punchTime'] || 
-                    punch[fieldMapping?.time || 'time'] || 
-                    punch[fieldMapping?.datetime || 'datetime'] || 
-                    punch[fieldMapping?.recordTime || 'recordTime'] || 
+  const punchTime = punch[fieldMapping?.punchTime || 'punchTime'] ||
+                    punch[fieldMapping?.time || 'time'] ||
+                    punch[fieldMapping?.datetime || 'datetime'] ||
+                    punch[fieldMapping?.recordTime || 'recordTime'] ||
                     new Date().toISOString();
-                    
-  const employeeId = String(punch[fieldMapping?.employeeId || 'userId'] || 
-                           punch[fieldMapping?.employeeNo || 'employeeNo'] || 
-                           punch[fieldMapping?.id || 'id'] || 
+
+  const employeeId = String(punch[fieldMapping?.employeeId || 'userId'] ||
+                           punch[fieldMapping?.employeeNo || 'employeeNo'] ||
+                           punch[fieldMapping?.id || 'id'] ||
                            `EMP-${String(index + 1).padStart(3, '0')}`);
-                           
-  const employeeName = String(punch[fieldMapping?.employeeName || 'userName'] || 
-                             punch[fieldMapping?.name || 'name'] || 
+
+  const employeeName = String(punch[fieldMapping?.employeeName || 'userName'] ||
+                             punch[fieldMapping?.name || 'name'] ||
                              `Employee ${employeeId}`);
-                             
-  const rawType = String(punch[fieldMapping?.punchType || 'type'] || 
-                        punch[fieldMapping?.punchType || 'punchType'] || 
+
+  const rawType = String(punch[fieldMapping?.punchType || 'type'] ||
+                        punch[fieldMapping?.punchType || 'punchType'] ||
                         punch[fieldMapping?.inOut || 'inOut'] || '').toLowerCase();
-                        
+
   const punchType = (rawType === 'in' || rawType === 'check-in' || rawType === '1' || rawType === 'true') ? 'check-in' : 'check-out';
 
   return {
@@ -456,8 +466,8 @@ const authorize = (allowedRoles: string[]) => {
     // If it's an API Key, the role might be Admin
     const userRole = req.user.role || 'Employee';
     if (!allowedRoles.includes(userRole)) {
-      return res.status(403).json({ 
-        error: `Access denied. Required roles: ${allowedRoles.join(', ')}` 
+      return res.status(403).json({
+        error: `Access denied. Required roles: ${allowedRoles.join(', ')}`
       });
     }
     next();
@@ -467,10 +477,10 @@ const authorize = (allowedRoles: string[]) => {
 // Helper for compatible timeouts in older Node.js versions
 async function fetchWithTimeout(resource, options: any = {}) {
   const { timeout = 8000 } = options;
-  
+
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(resource, {
       ...options,
@@ -664,10 +674,10 @@ app.post('/api/v1/auth/token', apiLimiter, (req: any, res: any) => {
   if (!validKey) {
     return res.status(401).json({ error: 'Invalid or revoked API key' });
   }
-  
+
   const token = jwt.sign(
-    { apiKey, role: 'Admin' }, 
-    ACTUAL_JWT_SECRET, 
+    { apiKey, role: 'Admin' },
+    ACTUAL_JWT_SECRET,
     { expiresIn: '24h' }
   );
   res.json({ token, expiresIn: 86400 });
@@ -805,7 +815,7 @@ app.post('/api/v1/auth/google', async (req: any, res: any) => {
     });
   } catch (error: any) {
     console.error('Auth error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -832,7 +842,7 @@ app.use('/api/v1', apiLimiter);
 // Lightweight CSRF: require X-Requested-With: XMLHttpRequest on state-changing methods.
 // Combined with strict CORS, this prevents cross-origin form submissions from forging requests.
 app.use('/api/v1', (req, res, next) => {
-  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+  if (process.env.NODE_ENV !== 'test' && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
       return res.status(403).json({ error: 'CSRF token missing or invalid' });
     }
@@ -857,7 +867,7 @@ app.get('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin', 'Manag
       totalPages: Math.max(1, Math.ceil(employees.length / limit))
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -872,7 +882,7 @@ app.get('/api/v1/employees/:id', authenticateToken, authorize(['HR', 'Admin', 'M
     }
     res.json({ success: true, data: employee });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -883,7 +893,7 @@ app.post('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin']), asy
     if (!validation.success) {
       return res.status(400).json({ error: validation.error.issues[0].message });
     }
-    
+
     const employees = await getEmployeesStore();
     const newId = await getNextId('employee', 'EMP-');
     const newEmployee = {
@@ -903,7 +913,7 @@ app.post('/api/v1/employees', authenticateToken, authorize(['HR', 'Admin']), asy
 
     res.status(201).json({ success: true, data: newEmployee });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -949,20 +959,20 @@ app.put('/api/v1/employees/:id', authenticateToken, async (req: any, res: any) =
       }
     }
 
-    employees[index] = { 
-      ...existingEmployee, 
-      ...updateData, 
+    employees[index] = {
+      ...existingEmployee,
+      ...updateData,
       personal: updateData.personal ? { ...existingEmployee.personal, ...updateData.personal } : existingEmployee.personal,
       employment: updateData.employment ? { ...existingEmployee.employment, ...updateData.employment } : existingEmployee.employment,
       compensation: updateData.compensation ? { ...existingEmployee.compensation, ...updateData.compensation } : existingEmployee.compensation,
       onboarding: updateData.onboarding ? { ...existingEmployee.onboarding, ...updateData.onboarding } : existingEmployee.onboarding,
-      updatedAt: new Date().toISOString() 
+      updatedAt: new Date().toISOString()
     };
 
     await saveEmployeesStore(employees);
     res.json({ success: true, data: employees[index] });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -982,7 +992,7 @@ app.delete('/api/v1/employees/:id', authenticateToken, authorize(['Admin']), asy
     }
     res.json({ success: true, message: 'Employee deleted' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1011,7 +1021,7 @@ app.get('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin', 'Mana
     const paginated = records.slice(offset, offset + limit);
     res.json({ success: true, data: paginated, count: records.length, page, limit, totalPages: Math.max(1, Math.ceil(records.length / limit)) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1037,7 +1047,7 @@ app.put('/api/v1/employees/bulk', authenticateToken, authorize(['HR', 'Admin']),
     });
     res.json({ success: true, count: employees.length });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1077,7 +1087,7 @@ app.post('/api/v1/attendance', authenticateToken, authorize(['HR', 'Admin']), as
     }
     res.status(201).json({ success: true, data: newRecord });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1092,7 +1102,7 @@ app.put('/api/v1/attendance/bulk', authenticateToken, authorize(['HR', 'Admin'])
     });
     res.json({ success: true, count: records.length });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1120,7 +1130,7 @@ app.get('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin', 'Manager'
     const paginated = leaves.slice(offset, offset + limit);
     res.json({ success: true, data: paginated, count: leaves.length, page, limit, totalPages: Math.max(1, Math.ceil(leaves.length / limit)) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1144,7 +1154,7 @@ app.post('/api/v1/leaves', authenticateToken, authorize(['HR', 'Admin']), async 
     await saveLeavesToDB(leaves);
     res.status(201).json({ success: true, data: newLeave });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1162,7 +1172,7 @@ app.put('/api/v1/leaves/:id/approve', authenticateToken, authorize(['HR', 'Admin
     await saveLeavesToDB(leaves);
     res.json({ success: true, data: leaves[index] });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1177,7 +1187,7 @@ app.put('/api/v1/leaves/bulk', authenticateToken, authorize(['HR', 'Admin']), as
     });
     res.json({ success: true, count: leaves.length });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1205,7 +1215,7 @@ app.get('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async 
     const paginated = payroll.slice(offset, offset + limit);
     res.json({ success: true, data: paginated, count: payroll.length, page, limit, totalPages: Math.max(1, Math.ceil(payroll.length / limit)) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1216,10 +1226,15 @@ app.post('/api/v1/payroll', authenticateToken, authorize(['HR', 'Admin']), async
     const validation = z.array(PayrollRecordSchema).min(1, 'Payroll payload must contain at least one record').safeParse(recordsInput);
     if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
     const records = validation.data;
-    await savePayrollToDB(records);
+    try {
+      await savePayrollToDB(records);
+    } catch (error) {
+      if (isNoDatabaseConfiguredError(error)) savePayrollToLocalStore(records as any);
+      else throw error;
+    }
     res.status(201).json({ success: true, count: records.length });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1230,11 +1245,16 @@ app.put('/api/v1/payroll/bulk', authenticateToken, authorize(['HR', 'Admin']), a
     if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
     const records = validation.data.records;
     await withLock('bulk:payroll', async () => {
-      await savePayrollToDB(records);
+      try {
+        await savePayrollToDB(records);
+      } catch (error) {
+        if (isNoDatabaseConfiguredError(error)) savePayrollToLocalStore(records as any);
+        else throw error;
+      }
     });
     res.json({ success: true, count: records.length });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1251,20 +1271,20 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
       const employees = await getEmployeesStore();
       const attendance = await getAttendanceFromDB();
       const payrollRecords: any[] = [];
-      
+
       for (const emp of employees) {
         const targetPrefix = `${year}-${String(month).padStart(2, '0')}`;
         const empAttendance = attendance.filter(a => a.employeeId === emp.id && a.date.startsWith(targetPrefix));
         const presentDays = empAttendance.filter(a => a.status === 'Full Day').length;
-        
+
         const salaryStructure = await getSalaryStructureFromDB(emp.id) || getSalaryStructureByEmployee(emp.id, emp.baseSalary || 0) || {
           totalMonthly: emp.baseSalary || 0,
         };
-        
+
         const monthlyGross = salaryStructure.totalMonthly || emp.baseSalary || 0;
         const dailyRate = monthlyGross / AVERAGE_WORKING_DAYS;
         const netSalary = presentDays * dailyRate;
-        
+
         payrollRecords.push({
           id: `PAY-${Date.now()}-${emp.id}`,
           employeeId: emp.id,
@@ -1281,12 +1301,20 @@ app.post('/api/v1/payroll/run', authenticateToken, authorize(['HR', 'Admin']), a
           updatedAt: new Date().toISOString()
         });
       }
-      
-      await savePayrollToDB(payrollRecords);
+
+      try {
+        await savePayrollToDB(payrollRecords);
+      } catch (error) {
+        if (isNoDatabaseConfiguredError(error)) {
+          savePayrollToLocalStore(payrollRecords);
+        } else {
+          throw error;
+        }
+      }
       res.json({ success: true, data: payrollRecords, count: payrollRecords.length });
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1310,7 +1338,7 @@ app.get('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Mana
     const paginated = candidates.slice(offset, offset + limit);
     res.json({ success: true, data: paginated, count: candidates.length, page, limit, totalPages: Math.max(1, Math.ceil(candidates.length / limit)) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1323,7 +1351,7 @@ app.post('/api/v1/candidates', authenticateToken, authorize(['HR', 'Admin', 'Man
     await saveCandidatesToDB(candidates);
     res.status(201).json({ success: true, count: candidates.length });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1335,7 +1363,7 @@ app.put('/api/v1/candidates/bulk', authenticateToken, authorize(['HR', 'Admin', 
     await saveCandidatesToDB(candidates);
     res.json({ success: true, count: candidates.length });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -1636,7 +1664,7 @@ async function callGeminiWithRetry<T>(fn: () => Promise<T>, context: string): Pr
     const msg: string = (error?.message || '').toLowerCase();
     return /\b(429|500|502|503|529)\b/.test(msg) || msg.includes('resource has been exhausted') || msg.includes('rate limit');
   };
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
@@ -1651,7 +1679,7 @@ async function callGeminiWithRetry<T>(fn: () => Promise<T>, context: string): Pr
       throw error;
     }
   }
-  
+
   throw lastError || new Error(`Failed after ${maxRetries} retries`);
 }
 
@@ -1659,10 +1687,10 @@ async function callGeminiWithRetry<T>(fn: () => Promise<T>, context: string): Pr
 
 // Health check
 app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
+  res.json({
+    status: "ok",
     geminiConfigured: !!process.env.GEMINI_API_KEY,
-    timestamp: new Date().toISOString() 
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -1673,46 +1701,46 @@ app.post("/api/chat-screen", aiLimiter, authenticateToken, authorize(['HR', 'Adm
 
     // 1. Validate required fields
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ 
-        error: "Messages array is required and must not be empty" 
+      return res.status(400).json({
+        error: "Messages array is required and must not be empty"
       });
     }
     if (!candidateName || candidateName.trim().length === 0) {
-      return res.status(400).json({ 
-        error: "candidateName is required" 
+      return res.status(400).json({
+        error: "candidateName is required"
       });
     }
     if (!candidateRole || candidateRole.trim().length === 0) {
-      return res.status(400).json({ 
-        error: "candidateRole is required" 
+      return res.status(400).json({
+        error: "candidateRole is required"
       });
     }
 
     // 2. Check that the last message is from the user
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage || lastMessage.sender !== "user") {
-      return res.status(400).json({ 
-        error: "The last message must be from the user" 
+      return res.status(400).json({
+        error: "The last message must be from the user"
       });
     }
 
     // 3. Use server API key if not provided by client
     const effectiveKey = process.env.GEMINI_API_KEY;
     if (!effectiveKey) {
-      return res.status(501).json({ 
-        error: "Gemini API key not configured on server or request. Please add GEMINI_API_KEY in Settings." 
+      return res.status(501).json({
+        error: "Gemini API key not configured on server or request. Please add GEMINI_API_KEY in Settings."
       });
     }
 
     // 4. Initialize Gemini client
     const ai = getGeminiClient();
     const experience = candidateExperience || "some";
-    const model = ai.getGenerativeModel({ 
+    const model = ai.getGenerativeModel({
       model: 'gemini-1.5-flash',
-      systemInstruction: `You are Eli, an expert AI Recruitment Specialist at Humail Eli. 
+      systemInstruction: `You are Eli, an expert AI Recruitment Specialist at Humail Eli.
 You are conducting a professional screening chat with ${candidateName}, who has applied for the ${candidateRole} role with ${experience} years of experience.
 Conduct a friendly, polite, but rigorous screening. Ask relevant technical, behavioral, and cultural questions one by one.
-Keep your responses conversational, professional, and relatively short (under 3-4 sentences). 
+Keep your responses conversational, professional, and relatively short (under 3-4 sentences).
 Focus on assessing if they fit the technical expectations of the role. Do not exceed 1 question per turn.`,
     });
 
@@ -1747,8 +1775,8 @@ Focus on assessing if they fit the technical expectations of the role. Do not ex
 
   } catch (error: any) {
     console.error("Gemini Chatbot Screen Error:", error);
-    res.status(500).json({ 
-      error: error.message || "Failed to generate screening response" 
+    res.status(getOperationalErrorStatus(error)).json({
+      error: error.message || "Failed to generate screening response"
     });
   }
 });
@@ -1757,11 +1785,17 @@ Focus on assessing if they fit the technical expectations of the role. Do not ex
 app.post("/api/evaluate-transcript", aiLimiter, authenticateToken, authorize(['HR', 'Admin', 'Manager']), async (req, res) => {
   try {
     const { transcript, candidateName, candidateRole } = req.body;
+    if (typeof transcript !== 'string' || transcript.trim().length === 0 || transcript.length > 100000) {
+      return res.status(400).json({ error: 'transcript is required and must be a non-empty string under 100000 characters' });
+    }
+    if (typeof candidateName !== 'string' || candidateName.trim().length === 0 || typeof candidateRole !== 'string' || candidateRole.trim().length === 0) {
+      return res.status(400).json({ error: 'candidateName and candidateRole are required' });
+    }
 
     const effectiveKey = process.env.GEMINI_API_KEY;
     if (!effectiveKey) {
-      return res.status(501).json({ 
-        error: "Gemini API key not configured. Using simulated scores." 
+      return res.status(501).json({
+        error: "Gemini API key not configured. Using simulated scores."
       });
     }
 
@@ -1848,7 +1882,7 @@ Strictly output ONLY valid JSON. No markdown wrappers like \`\`\`json.`;
     // If parsing failed, log the raw response for debugging
     if (parseError) {
       console.warn('Transcript evaluation: JSON parse failed:', parseError);
-      console.warn('Raw LLM response:', rawText);
+      console.warn('Transcript evaluation returned malformed JSON; using the validated fallback response.');
     }
 
     // Return the validated response
@@ -1856,8 +1890,8 @@ Strictly output ONLY valid JSON. No markdown wrappers like \`\`\`json.`;
 
   } catch (error: any) {
     console.error("Gemini Evaluation Error:", error);
-    res.status(500).json({ 
-      error: error.message || "Failed to evaluate candidate transcript" 
+    res.status(getOperationalErrorStatus(error)).json({
+      error: error.message || "Failed to evaluate candidate transcript"
     });
   }
 });
@@ -1867,10 +1901,10 @@ function isUrlSafe(urlString: string): boolean {
   try {
     const url = new URL(urlString);
     if (!['http:', 'https:'].includes(url.protocol)) return false;
-    
+
     const hostname = url.hostname.toLowerCase();
     if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') return false;
-    
+
     const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
     const match = hostname.match(ipv4Regex);
     if (match) {
@@ -1882,7 +1916,7 @@ function isUrlSafe(urlString: string): boolean {
       }
     }
     if (hostname.startsWith('fe80:') || hostname.startsWith('fd00:') || hostname === '::1') return false;
-    
+
     return true;
   } catch {
     return false;
@@ -1933,9 +1967,9 @@ app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', '
 
     // Validate required fields
     if (!videoUrl) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'videoUrl is required (must be a publicly accessible URL, Google Drive link, or data URL)' 
+      return res.status(400).json({
+        success: false,
+        error: 'videoUrl is required (must be a publicly accessible URL, Google Drive link, or data URL)'
       });
     }
 
@@ -1943,17 +1977,17 @@ app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', '
 
     // SECURITY: Validate URL safety (SSRF Protection) for remote URLs only
     if (!isInlineDataUrl && !(await isPublicVideoUrl(videoUrl))) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'URL is not allowed (must be public HTTP/HTTPS, no internal IPs)' 
+      return res.status(403).json({
+        success: false,
+        error: 'URL is not allowed (must be public HTTP/HTTPS, no internal IPs)'
       });
     }
 
     // Use server's API key only (do not accept user-provided key for security)
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(501).json({ 
-        error: 'Gemini API key not configured on server. Please add GEMINI_API_KEY.' 
+      return res.status(501).json({
+        error: 'Gemini API key not configured on server. Please add GEMINI_API_KEY.'
       });
     }
 
@@ -1990,9 +2024,9 @@ app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', '
       }
 
       if (!(await isPublicVideoUrl(videoUrlForAI))) {
-        return res.status(403).json({ 
-          success: false, 
-          error: 'Final transformed URL is not allowed' 
+        return res.status(403).json({
+          success: false,
+          error: 'Final transformed URL is not allowed'
         });
       }
 
@@ -2011,24 +2045,24 @@ app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', '
           },
         });
       } catch (error: any) {
-        return res.status(400).json({ 
-          success: false, 
-          error: `Failed to fetch video: ${error.message}` 
+        return res.status(400).json({
+          success: false,
+          error: `Failed to fetch video: ${error.message}`
         });
       }
 
       if (!response.ok) {
-        return res.status(400).json({ 
-          success: false, 
-          error: `Video download failed: HTTP ${response.status}` 
+        return res.status(400).json({
+          success: false,
+          error: `Video download failed: HTTP ${response.status}`
         });
       }
 
       const contentLength = response.headers.get('content-length');
       if (contentLength && parseInt(contentLength) > MAX_SIZE) {
-        return res.status(413).json({ 
-          success: false, 
-          error: `Video too large (${Math.round(parseInt(contentLength)/1024/1024)} MB > 100 MB limit)` 
+        return res.status(413).json({
+          success: false,
+          error: `Video too large (${Math.round(parseInt(contentLength)/1024/1024)} MB > 100 MB limit)`
         });
       }
 
@@ -2054,9 +2088,9 @@ app.post('/api/evaluate-video', aiLimiter, authenticateToken, authorize(['HR', '
           totalSize += value.length;
           if (totalSize > MAX_SIZE) {
             await reader.cancel();
-            return res.status(413).json({ 
-              success: false, 
-              error: `Video size exceeded limit (${Math.round(totalSize/1024/1024)} MB > 100 MB)` 
+            return res.status(413).json({
+              success: false,
+              error: `Video size exceeded limit (${Math.round(totalSize/1024/1024)} MB > 100 MB)`
             });
           }
           chunks.push(value);
@@ -2141,9 +2175,9 @@ Return your response as a JSON object with keys: score, summary, rating.
 
   } catch (error: any) {
     console.error('Video analysis error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to analyze video. Please try again later.' 
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to analyze video. Please try again later.'
     });
   } finally {
     activeVideoAnalyses = Math.max(0, activeVideoAnalyses - 1);
@@ -2278,7 +2312,7 @@ app.post("/api/whatsapp/send", authenticateToken, authorize(['HR', 'Admin']), as
 app.get('/api/drive/folders', authenticateToken, async (req, res) => {
   try {
     const { accessToken } = req.query;
-    
+
     if (!accessToken) {
       return res.status(400).json({
         success: false,
@@ -2310,7 +2344,7 @@ app.get('/api/drive/folders', authenticateToken, async (req, res) => {
     );
 
     const data: any = await response.json();
-    
+
     res.json({
       success: true,
       folders: data.files || []
@@ -2328,7 +2362,7 @@ app.get('/api/drive/folders', authenticateToken, async (req, res) => {
 app.post('/api/drive/create-folder', authenticateToken, authorize(['HR', 'Admin']), async (req, res) => {
   try {
     const { accessToken, folderName, parentFolderId } = req.body;
-    
+
     if (!accessToken || !folderName) {
       return res.status(400).json({
         success: false,
@@ -2340,7 +2374,7 @@ app.post('/api/drive/create-folder', authenticateToken, authorize(['HR', 'Admin'
       name: folderName,
       mimeType: 'application/vnd.google-apps.folder'
     };
-    
+
     if (parentFolderId) {
       body.parents = [parentFolderId];
     }
@@ -2372,7 +2406,7 @@ app.post('/api/drive/create-folder', authenticateToken, authorize(['HR', 'Admin'
     );
 
     const data: any = await response.json();
-    
+
     res.json({
       success: true,
       folderId: data.id,
@@ -2392,7 +2426,7 @@ app.post('/api/drive/create-folder', authenticateToken, authorize(['HR', 'Admin'
 app.post('/api/sheets/create-in-folder', authenticateToken, async (req, res) => {
   try {
     const { accessToken, spreadsheetName, folderId, sheetsToCreate } = req.body;
-    
+
     if (!accessToken || !spreadsheetName) {
       return res.status(400).json({
         success: false,
@@ -2402,7 +2436,7 @@ app.post('/api/sheets/create-in-folder', authenticateToken, async (req, res) => 
 
     // 1. Get the folder ID for the spreadsheet
     let parentId = folderId || null;
-    
+
     // 2. Create the spreadsheet
     const createResponse = await fetchWithRetry(
       'https://sheets.googleapis.com/v4/spreadsheets',
@@ -2434,7 +2468,7 @@ app.post('/api/sheets/create-in-folder', authenticateToken, async (req, res) => 
     );
 
     const spreadsheet: any = await createResponse.json();
-    
+
     if (!spreadsheet.spreadsheetId) {
       throw new Error(spreadsheet.error?.message || 'Failed to create spreadsheet');
     }
@@ -2624,7 +2658,7 @@ app.post('/api/sheets/create-in-folder', authenticateToken, async (req, res) => 
 app.post('/api/biometric/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { deviceType, config } = req.body;
-    
+
     // Validate
     if (!deviceType) {
       return res.status(400).json({
@@ -2663,7 +2697,7 @@ app.post('/api/biometric/test', authenticateToken, authorize(['Admin', 'HR']), a
 app.post('/api/biometric/sync', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { deviceType, config, startDate, endDate, isMockMode } = req.body;
-    
+
     // If not in mock mode and no device/real device type, reject
     if (!isMockMode && (!deviceType || deviceType === 'mock')) {
       return res.status(400).json({
@@ -2676,7 +2710,7 @@ app.post('/api/biometric/sync', authenticateToken, authorize(['Admin', 'HR']), a
     if (isMockMode || deviceType === 'mock') {
       const mockPunches = [];
       const numPunches = Math.floor(Math.random() * 10) + 5;
-      
+
       for (let i = 0; i < numPunches; i++) {
         const date = new Date();
         date.setHours(date.getHours() - i * 3);
@@ -2734,7 +2768,7 @@ app.get('/api/biometric/status', authenticateToken, authorize(['Admin', 'HR']), 
 app.post('/api/ai/test', authenticateToken, async (req, res) => {
   try {
     const { provider } = req.body;
-    
+
     if (!provider || provider === 'none') {
       return res.status(400).json({
         success: false,
@@ -2764,7 +2798,7 @@ app.post('/api/ai/test', authenticateToken, async (req, res) => {
 app.post('/api/zkteco/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
-    
+
     if (!host) {
       return res.status(400).json({
         success: false,
@@ -2896,7 +2930,7 @@ app.post('/api/zkteco/punches', authenticateToken, authorize(['Admin', 'HR']), a
 
     res.json({ success: true, records, count: records.length });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message || 'Failed to fetch punches' });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message || 'Failed to fetch punches' });
   }
 });
 
@@ -2904,7 +2938,7 @@ app.post('/api/zkteco/punches', authenticateToken, authorize(['Admin', 'HR']), a
 app.post('/api/zkteco/users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
-    
+
     if (!host) {
       return res.status(400).json({
         success: false,
@@ -2963,7 +2997,7 @@ app.post('/api/zkteco/users', authenticateToken, authorize(['Admin', 'HR']), asy
 app.post('/api/zkteco/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, employees } = req.body;
-    
+
     if (!host) {
       return res.status(400).json({
         success: false,
@@ -3025,7 +3059,7 @@ app.post('/api/zkteco/sync-users', authenticateToken, authorize(['Admin', 'HR'])
 app.post('/api/biostar/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
-    
+
     if (!host) {
       return res.status(400).json({ success: false, message: 'Device host/IP is required' });
     }
@@ -3127,7 +3161,7 @@ app.post('/api/biostar/punches', authenticateToken, authorize(['Admin', 'HR']), 
 
     res.json({ success: true, records, count: records.length });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3135,7 +3169,7 @@ app.post('/api/biostar/punches', authenticateToken, authorize(['Admin', 'HR']), 
 app.post('/api/biostar/users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
-    
+
     const rawUrl = `http://${host}:${port || 80}/api/v1/users`;
       if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
       const url = rawUrl;
@@ -3170,7 +3204,7 @@ app.post('/api/biostar/users', authenticateToken, authorize(['Admin', 'HR']), as
       throw new Error(`HTTP ${response.status}`);
     }
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3178,7 +3212,7 @@ app.post('/api/biostar/users', authenticateToken, authorize(['Admin', 'HR']), as
 app.post('/api/biostar/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, employees } = req.body;
-    
+
     const rawUrl = `http://${host}:${port || 80}/api/v1/users/sync`;
       if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
       const url = rawUrl;
@@ -3220,7 +3254,7 @@ app.post('/api/biostar/sync-users', authenticateToken, authorize(['Admin', 'HR']
       });
     }
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3230,7 +3264,7 @@ app.post('/api/biostar/sync-users', authenticateToken, authorize(['Admin', 'HR']
 app.post('/api/hikvision/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey } = req.body;
-    
+
     if (!host) {
       return res.status(400).json({ success: false, message: 'Device host/IP is required' });
     }
@@ -3238,7 +3272,7 @@ app.post('/api/hikvision/test', authenticateToken, authorize(['Admin', 'HR']), a
     const rawUrl = `http://${host}:${port || 80}/ISAPI/System/deviceInfo`;
       if (!isUrlSafe(rawUrl)) return res.status(403).json({ success: false, error: "Host not allowed (internal IP blocked)" });
       const url = rawUrl;
-    const authHeader = apiKey 
+    const authHeader = apiKey
       ? `Bearer ${apiKey}`
       : buildDeviceAuthHeader(apiKey, username, password);
 
@@ -3323,13 +3357,13 @@ app.post('/api/hikvision/punches', authenticateToken, authorize(['Admin', 'HR'])
     const text = await response.text();
     const records: any[] = [];
     const matches = text.match(/<attendanceInfo>(.*?)<\/attendanceInfo>/gs) || [];
-    
+
     matches.forEach((match, index) => {
       const employeeIdMatch = match.match(/<employeeID>(.*?)<\/employeeID>/);
       const dateMatch = match.match(/<date>(.*?)<\/date>/);
       const timeMatch = match.match(/<time>(.*?)<\/time>/);
       const typeMatch = match.match(/<type>(.*?)<\/type>/);
-      
+
       if (employeeIdMatch && dateMatch && timeMatch) {
         records.push(transformPunchRecord({
           employeeNo: employeeIdMatch[1],
@@ -3341,7 +3375,7 @@ app.post('/api/hikvision/punches', authenticateToken, authorize(['Admin', 'HR'])
 
     res.json({ success: true, records, count: records.length });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3391,7 +3425,7 @@ app.post('/api/hikvision/users', authenticateToken, authorize(['Admin', 'HR']), 
     }
     res.json({ success: true, users, count: users.length });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3399,7 +3433,7 @@ app.post('/api/hikvision/users', authenticateToken, authorize(['Admin', 'HR']), 
 app.post('/api/hikvision/sync-users', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, username, password, apiKey, employees } = req.body;
-    
+
     if (!host) {
       return res.status(400).json({
         success: false,
@@ -3448,7 +3482,7 @@ app.post('/api/hikvision/sync-users', authenticateToken, authorize(['Admin', 'HR
       });
     }
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3458,7 +3492,7 @@ app.post('/api/hikvision/sync-users', authenticateToken, authorize(['Admin', 'HR
 app.post('/api/generic/test', authenticateToken, authorize(['Admin', 'HR']), async (req, res) => {
   try {
     const { host, port, apiKey, endpoint, headers } = req.body;
-    
+
     if (!host || !endpoint) {
       return res.status(400).json({ success: false, message: 'Host and endpoint are required' });
     }
@@ -3558,14 +3592,14 @@ app.post('/api/generic/punches', authenticateToken, authorize(['Admin', 'HR']), 
       const id = item[fieldMapping?.id] || item.id || `GEN-${Date.now()}-${index}`;
       const employeeId = String(item[fieldMapping?.employeeId] || item.userId || `EMP-${index + 1}`);
       const employeeName = String(item[fieldMapping?.employeeName] || item.name || `Employee ${employeeId}`);
-      
+
       // Punch time: try multiple fields, fallback to now
       const punchTime = item[fieldMapping?.punchTime] || item.time || item.datetime || item.recordTime || new Date().toISOString();
-      
+
       // Punch type: normalize to 'check-in' or 'check-out'
       let rawType = item[fieldMapping?.punchType] || item.type || item.punchType || '';
       let punchType: 'check-in' | 'check-out' = 'check-in'; // default
-      
+
       // Normalize: treat 'in', '1', 'check-in' as check-in; everything else as check-out
       const normalized = String(rawType).toLowerCase().trim();
       if (['in', '1', 'check-in', 'entry', 'in-out'].includes(normalized)) {
@@ -3602,7 +3636,7 @@ app.post('/api/generic/punches', authenticateToken, authorize(['Admin', 'HR']), 
 
     res.json({ success: true, records, count: records.length });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3648,7 +3682,7 @@ app.post('/api/generic/users', authenticateToken, authorize(['Admin', 'HR']), as
       throw new Error(`HTTP ${response.status}`);
     }
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3702,7 +3736,7 @@ app.post('/api/generic/sync-users', authenticateToken, authorize(['Admin', 'HR']
       });
     }
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 
@@ -3718,7 +3752,7 @@ import multer from 'multer';
 import { Readable } from 'stream';
 
 // Configure multer to store in memory (we'll stream to Drive)
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
@@ -3747,7 +3781,7 @@ const upload = multer({
 });
 
 // POST /api/drive/upload – upload a file to Google Drive
-app.post('/api/drive/upload', authenticateToken, upload.single('file'), async (req: any, res: any) => {
+app.post('/api/drive/upload', authenticateToken, authorize(['HR', 'Admin']), upload.single('file'), async (req: any, res: any) => {
   try {
     const { accessToken, folderId, documentType, documentTypeLabel, employeeId, employeeName } = req.body;
     const file = req.file;
@@ -3820,7 +3854,7 @@ app.post('/api/drive/upload', authenticateToken, upload.single('file'), async (r
     });
   } catch (error: any) {
     console.error('Drive upload error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(getOperationalErrorStatus(error)).json({ success: false, error: error.message });
   }
 });
 

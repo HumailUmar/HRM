@@ -35,6 +35,7 @@ import {
   getEmployeeHistory as getEmployeeHistoryLocal,
   createExitRecord as createExitRecordLocal,
   getExitRecords as getExitRecordsLocal,
+  saveExitRecords as saveExitRecordsLocal,
   getExitChecklistTemplates as getExitChecklistTemplatesLocal,
   getExitInterviewTemplates as getExitInterviewTemplatesLocal,
   getExitProcessStages as getExitProcessStagesLocal,
@@ -400,6 +401,10 @@ export class LocalStorageAdapter implements IDataAdapter {
 
   async getOnboardingTemplates(): Promise<OnboardingTemplate[]> {
     return getOnboardingTemplatesLocal();
+  }
+
+  async saveOnboardingTasks(tasks: LegacyOnboardingTask[]): Promise<void> {
+    await saveOnboardingTasksLocal(tasks);
   }
 
   // DEPARTMENTS & DESIGNATIONS
@@ -835,15 +840,6 @@ export class LocalStorageAdapter implements IDataAdapter {
 
   async getSheetLogs(): Promise<SheetLog[]> {
     return getSheetLogsLocal();
-  }
-
-  // ONBOARDING
-  async getOnboardingTasks(): Promise<LegacyOnboardingTask[]> {
-    return getOnboardingTasksLocal();
-  }
-
-  async saveOnboardingTasks(tasks: LegacyOnboardingTask[]): Promise<void> {
-    await saveOnboardingTasksLocal(tasks);
   }
 
   // SUCCESSION

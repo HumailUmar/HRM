@@ -424,7 +424,9 @@ export default function Employees({
     try {
       await data.saveEmployee(newEmp);
     } catch (persistErr) {
-      logger.error('Failed to persist new employee to backend; kept in local state:', persistErr);
+      setEmployees(employees);
+      logger.error('Failed to persist new employee to backend; employee state was rolled back:', persistErr);
+      return;
     }
     
     // Log to simulated sheet

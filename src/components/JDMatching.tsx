@@ -36,7 +36,7 @@ export default function JDMatching() {
     return () => { mounted = false; };
   }, [data]);
 
-  const handleRunMatching = () => {
+  const handleRunMatching = async () => {
     if (!selectedJdId) return;
     const jd = jds.find(j => j.id === selectedJdId);
     if (!jd) return;
@@ -59,7 +59,7 @@ export default function JDMatching() {
     // Auto-shortlist logic
     if (jd.matchingConfig?.autoShortlist) {
       const updatedCandidates = candidates.map(c => {
-        const match = updatedMatches.find(m => m.candidateId === c.id && m.jdId === jd.id);
+        const match = updatedMatches.find(m => m.candidateId === c.id && m.jobId === jd.id);
         if (match && match.overallScore >= (jd.matchingConfig?.strongMatchThreshold || 80)) {
           return { ...c, status: 'Shortlisted' } as Candidate;
         }

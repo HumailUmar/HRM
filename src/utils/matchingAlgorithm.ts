@@ -42,7 +42,7 @@ export function calculateMatch(job: JobDescription, candidate: Candidate): JDRes
   // If no active categories, return a default match (0%)
   if (totalActiveWeight === 0) {
     return {
-      id: `MATCH-${Date.now()}`,
+      id: `MATCH-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       jobId: job.id,
       candidateId: candidate.id,
       candidateName: candidate.name,
@@ -151,7 +151,7 @@ export function calculateMatch(job: JobDescription, candidate: Candidate): JDRes
   const aiRecommendation = matchPercentage >= 70 ? 'Advance' : matchPercentage >= 40 ? 'Consider' : 'Reject';
 
   return {
-    id: `MATCH-${Date.now()}`,
+    id: `MATCH-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
     jobId: job.id,
     candidateId: candidate.id,
     candidateName: candidate.name,

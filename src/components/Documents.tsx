@@ -110,10 +110,16 @@ export default function Documents({ documents, setDocuments, employees, designat
         version: 1,
       };
 
-      // Save to local storage
+      const previous = documents;
       const updated = [...documents, newDoc];
       setDocuments(updated);
-      await data.saveEmployeeDocuments(updated);
+      try {
+        await data.saveEmployeeDocuments(updated);
+        window.dispatchEvent(new CustomEvent('hrm:data-changed', { detail: { entity: 'documents' } }));
+      } catch (error) {
+        setDocuments(previous);
+        throw error;
+      }
       alert('Document uploaded successfully!');
 
     } catch (error: any) {
@@ -125,9 +131,15 @@ export default function Documents({ documents, setDocuments, employees, designat
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Delete this document?')) {
+      const previous = documents;
       const updated = documents.filter(d => d.id !== id);
       setDocuments(updated);
-      await data.saveEmployeeDocuments(updated);
+      try {
+        await data.saveEmployeeDocuments(updated);
+        window.dispatchEvent(new CustomEvent('hrm:data-changed', { detail: { entity: 'documents' } }));
+      } catch (error) {
+        setDocuments(previous);
+      }
     }
   };
 
@@ -135,8 +147,14 @@ export default function Documents({ documents, setDocuments, employees, designat
     const updated = documents.map(d => 
       d.id === id ? { ...d, isVerified: true, status: 'Verified' as const } : d
     );
+    const previous = documents;
     setDocuments(updated);
-    await data.saveEmployeeDocuments(updated);
+    try {
+      await data.saveEmployeeDocuments(updated);
+      window.dispatchEvent(new CustomEvent('hrm:data-changed', { detail: { entity: 'documents' } }));
+    } catch (error) {
+      setDocuments(previous);
+    }
   };
 
   const filteredDocs = documents.filter(doc => {

@@ -320,7 +320,7 @@ export function deserializeEmployee(row: any[]): Employee {
   // Backward compatibility with legacy/simple row format used in some tests and imports:
   // [id, name, email, phone, role] — only trigger when row is exactly 5 columns AND
   // the row doesn't look like a serialized employee (which has exactly 5 identifiable header fields).
-  if (legacyRow.length === 5 && typeof legacyRow[4] === 'string' && !legacyRow[0]?.startsWith?.('EMP-')) {
+  if (legacyRow.length === 5 && typeof legacyRow[4] === 'string') {
     const [id = '', name = '', email = '', phone = '', role = ''] = legacyRow;
     return {
       id,

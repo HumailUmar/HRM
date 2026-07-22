@@ -100,7 +100,7 @@ export default function OrgChart({
     });
 
     onSaveNodes(updated);
-    data.data.addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: draggedId, parentId: targetParentId, action: "MOVE" });
+    data.addSheetLog("HumailEli_Org_Chart", "UPDATE", { id: draggedId, parentId: targetParentId, action: "MOVE" });
   };
 
   // Add Position

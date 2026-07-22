@@ -29,7 +29,7 @@ export default function PayGradeManagement() {
     return () => { cancelled = true; };
   }, [data]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name || !formData.code) {
       alert('Name and code are required');
       return;

@@ -56,7 +56,7 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
     setProgress(Math.round((answeredQuestions / totalQuestions) * 100));
   }, [currentReview, selectedCycle]);
 
-  const handleStartReview = (peer: Employee, cycle: PerformanceReviewCycle) => {
+  const handleStartReview = async (peer: Employee, cycle: PerformanceReviewCycle) => {
     let review = reviews.find(r => r.employeeId === peer.id && r.reviewCycleId === cycle.id && r.reviewerType === 'Peer' && r.reviewerId === userId);
     if (!review) {
       review = {
@@ -110,7 +110,7 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
     alert('Draft saved successfully!');
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!currentReview || !selectedCycle) return;
 
     const allQuestions = (selectedCycle.sections || []).flatMap(s => s.questions || []);
@@ -179,7 +179,7 @@ export default function PeerReview({ userId, userName }: PeerReviewProps) {
         });
         if (newAssignments.length > 0 && !cancelled) {
           setAssignments(newAssignments);
-          savePeerAssignments(newAssignments);
+          void data.savePeerAssignments(newAssignments);
         }
       }
     }

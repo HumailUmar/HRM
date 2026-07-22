@@ -99,8 +99,10 @@ export default function ExitManagement({ user, employees, setEmployees }: ExitMa
 
   // Load exit records
   useEffect(() => {
-    setExitRecords(getExitRecords());
-  }, []);
+    let cancelled = false;
+    data.getExitRecords().then(records => { if (!cancelled) setExitRecords(records); }).catch(() => { if (!cancelled) setExitRecords([]); });
+    return () => { cancelled = true; };
+  }, [data]);
 
   // Get active employees (not terminated)
   const activeEmployees = employees.filter(e => 
@@ -120,7 +122,7 @@ export default function ExitManagement({ user, employees, setEmployees }: ExitMa
   // ============================================================
   //  INITIATE EXIT PROCESS
   // ============================================================
-  const handleInitiateExit = (employeeId: string) => {
+  const handleInitiateExit = async (employeeId: string) => {
     const emp = employees.find(e => e.id === employeeId);
     if (!emp) return;
 

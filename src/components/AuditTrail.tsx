@@ -9,7 +9,7 @@ export default function AuditTrail() {
 
   useEffect(() => {
     let cancelled = false;
-    data.getEmployeeHistory().then(h => { if (!cancelled) setHistory(h); });
+    data.getEmployeeHistory('').then(h => { if (!cancelled) setHistory(h); });
     return () => { cancelled = true; };
   }, [data]);
   const [searchTerm, setSearchTerm] = useState('');

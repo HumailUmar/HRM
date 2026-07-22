@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { AppSettings, AttendanceRules, PayrollRules, RecruitmentRules, CompanySettings, StatusManagementRules, AuditTrailRules } from '../types';
+import { saveSettings as persistSettings } from '../lib/storage';
 import { 
   Sliders, Clock, Coins, UserPlus, Building, Save, Activity, Shield, 
   ChevronDown, ChevronUp, Calendar, Plus, Trash2, CheckCircle2, MessageCircle
@@ -173,6 +174,7 @@ export default function CompanyPolicies({ settings, setSettings }: CompanyPolici
       auditTrailRules
     };
 
+    persistSettings(updatedSettings);
     setSettings(updatedSettings);
 
     // Show dynamic beautiful toast

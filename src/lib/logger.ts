@@ -11,13 +11,27 @@ interface LogEntry {
   data?: any;
 }
 
+const SENSITIVE_KEYS = new Set([
+  'password', 'token', 'accesstoken', 'idtoken', 'authorization', 'cookie',
+  'apikey', 'secret', 'clientsecret', 'encryptionkey', 'jwt', 'rawbody',
+]);
+
+function sanitize(value: any, seen = new WeakSet<object>()): any {
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack };
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+  if (Array.isArray(value)) return value.map(item => sanitize(item, seen));
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    SENSITIVE_KEYS.has(key.toLowerCase()) ? '[REDACTED]' : sanitize(item, seen),
+  ]));
+}
+
 function formatArgs(args: any[]): any[] {
-  return args.map(arg => {
-    if (arg instanceof Error) {
-      return { name: arg.name, message: arg.message, stack: arg.stack };
-    }
-    return arg;
-  });
+  return args.map(arg => sanitize(arg));
 }
 
 function emit(level: LogLevel, message: string, module?: string, ...args: any[]) {
@@ -33,7 +47,7 @@ function emit(level: LogLevel, message: string, module?: string, ...args: any[])
     console.log(JSON.stringify(entry));
   } else {
     const prefix = module ? `[${module}]` : '';
-    console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](`${prefix} ${message}`, ...args);
+    console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](`${prefix} ${message}`, ...formatArgs(args));
   }
 }
 
