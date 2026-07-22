@@ -31,21 +31,34 @@ export default function Leaves() {
   }, [data]);
 
   const onAddLeave = async (newLeave: LeaveRecord) => {
-    await data.saveLeave(newLeave);
-    setLeaves(prev => [newLeave, ...prev]);
+    const previous = leaves;
+    const updated = [newLeave, ...previous];
+    setLeaves(updated);
+    try {
+      await data.saveLeave(newLeave);
+      window.dispatchEvent(new CustomEvent('hrm:data-changed', { detail: { entity: 'leaves' } }));
+    } catch (error) {
+      setLeaves(previous);
+      throw error;
+    }
   };
 
   const onUpdateLeaveStatus = async (id: string, status: 'Approved' | 'Rejected', approver: string) => {
-    setLeaves(prev => {
-      return prev.map(l => {
-        if (l.id === id) {
-          const updatedLeave = { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() };
-          data.saveLeave(updatedLeave);
-          return updatedLeave;
-        }
-        return l;
-      });
-    });
+    const previous = leaves;
+    const updated = previous.map(l => l.id === id
+      ? { ...l, status, approvedBy: approver, approvedAt: new Date().toISOString() }
+      : l);
+    setLeaves(updated);
+    try {
+      const changed = updated.find(l => l.id === id);
+      if (changed) {
+        await data.saveLeave(changed);
+        window.dispatchEvent(new CustomEvent('hrm:data-changed', { detail: { entity: 'leaves' } }));
+      }
+    } catch (error) {
+      setLeaves(previous);
+      throw error;
+    }
   };
 
   const [filterStatus, setFilterStatus] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');

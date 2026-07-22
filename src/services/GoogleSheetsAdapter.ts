@@ -65,6 +65,7 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
   private localFallback = new LocalStorageAdapter();
 
   constructor(settings: AppSettings) {
+    super();
     if (!settings?.googleSheets?.spreadsheetId) {
       throw new Error('GoogleSheetsAdapter requires settings.googleSheets.spreadsheetId');
     }
@@ -114,6 +115,10 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
     const rowIndex = await findRowById('HumailEli_Employees', employee.id);
     const serialized = serializeEmployee(employee);
     if (rowIndex !== -1) {
+      const current = await this.getEmployee(employee.id);
+      if (current?.updatedAt && employee.updatedAt && current.updatedAt > employee.updatedAt) {
+        throw new Error(`Employee ${employee.id} has a newer Google Sheets version; reload before saving`);
+      }
       const endCol = getColumnLetter(EMPLOYEE_HEADERS.length);
       await updateSheet('HumailEli_Employees', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
     } else {
@@ -124,9 +129,21 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
 
   async saveEmployees(employees: Employee[]): Promise<void> {
     try {
-      const headers = EMPLOYEE_HEADERS;
-      const rows = employees.map(serializeEmployee);
-      await updateSheet('HumailEli_Employees', 'A1', [headers, ...rows]);
+      await ensureSheetExists('HumailEli_Employees', EMPLOYEE_HEADERS);
+      for (const employee of employees) {
+        const rowIndex = await findRowById('HumailEli_Employees', employee.id);
+        const serialized = serializeEmployee(employee);
+        if (rowIndex !== -1) {
+          const current = await this.getEmployee(employee.id);
+          if (current?.updatedAt && employee.updatedAt && current.updatedAt > employee.updatedAt) {
+            throw new Error(`Employee ${employee.id} has a newer Google Sheets version; reload before saving`);
+          }
+          const endCol = getColumnLetter(EMPLOYEE_HEADERS.length);
+          await updateSheet('HumailEli_Employees', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
+        } else {
+          await appendToSheet('HumailEli_Employees', [serialized]);
+        }
+      }
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -162,8 +179,18 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
   async saveAttendance(records: AttendanceRecord[]): Promise<void> {
     try {
       const sheetName = this.settings.googleSheets.attendanceSheet || 'HumailEli_Attendance';
-      const rows = records.map(serializeAttendance);
-      await updateSheet(sheetName, 'A1', [ATTENDANCE_HEADERS, ...rows]);
+      await ensureSheetExists(sheetName, ATTENDANCE_HEADERS);
+      const current = await this.getAttendance();
+      for (const record of records) {
+        const rowIndex = await findRowById(sheetName, record.id);
+        const existing = current.find(item => item.id === record.id);
+        if (existing?.updatedAt && record.updatedAt && existing.updatedAt > record.updatedAt) {
+          throw new Error(`Attendance ${record.id} has a newer Google Sheets version; reload before saving`);
+        }
+        const serialized = serializeAttendance(record);
+        if (rowIndex === -1) await appendToSheet(sheetName, [serialized]);
+        else await updateSheet(sheetName, `A${rowIndex}:${getColumnLetter(ATTENDANCE_HEADERS.length)}${rowIndex}`, [serialized]);
+      }
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -172,6 +199,10 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
     const rowIndex = await findRowById(sheetName, record.id);
     const serialized = serializeAttendance(record);
     if (rowIndex !== -1) {
+      const current = (await this.getAttendance()).find(item => item.id === record.id);
+      if (current?.updatedAt && record.updatedAt && current.updatedAt > record.updatedAt) {
+        throw new Error(`Attendance ${record.id} has a newer Google Sheets version; reload before saving`);
+      }
       const endCol = getColumnLetter(ATTENDANCE_HEADERS.length);
       await updateSheet(sheetName, `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
     } else {
@@ -198,8 +229,18 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
   async savePayroll(records: PayrollRecord[]): Promise<void> {
     try {
       const sheetName = this.settings.googleSheets.payrollSheet || 'HumailEli_Payroll';
-      const rows = records.map(serializePayroll);
-      await updateSheet(sheetName, 'A1', [PAYROLL_HEADERS, ...rows]);
+      await ensureSheetExists(sheetName, PAYROLL_HEADERS);
+      const current = await this.getPayroll();
+      for (const record of records) {
+        const rowIndex = await findRowById(sheetName, record.id);
+        const existing = current.find(item => item.id === record.id);
+        if (existing?.updatedAt && record.updatedAt && existing.updatedAt > record.updatedAt) {
+          throw new Error(`Payroll ${record.id} has a newer Google Sheets version; reload before saving`);
+        }
+        const serialized = serializePayroll(record);
+        if (rowIndex === -1) await appendToSheet(sheetName, [serialized]);
+        else await updateSheet(sheetName, `A${rowIndex}:${getColumnLetter(PAYROLL_HEADERS.length)}${rowIndex}`, [serialized]);
+      }
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -224,6 +265,10 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
     const rowIndex = await findRowById(sheetName, leave.id);
     const serialized = serializeLeave(leave);
     if (rowIndex !== -1) {
+      const current = (await this.getLeaves()).find(item => item.id === leave.id);
+      if (current?.updatedAt && leave.updatedAt && current.updatedAt > leave.updatedAt) {
+        throw new Error(`Leave ${leave.id} has a newer Google Sheets version; reload before saving`);
+      }
       const endCol = getColumnLetter(LEAVES_HEADERS.length);
       await updateSheet(sheetName, `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
     } else {
@@ -234,8 +279,18 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
   async saveLeaves(records: LeaveRecord[]): Promise<void> {
     try {
       const sheetName = this.settings.googleSheets.leaveSheet || 'HumailEli_Leaves';
-      const rows = records.map(serializeLeave);
-      await updateSheet(sheetName, 'A1', [LEAVES_HEADERS, ...rows]);
+      await ensureSheetExists(sheetName, LEAVES_HEADERS);
+      const current = await this.getLeaves();
+      for (const leave of records) {
+        const rowIndex = await findRowById(sheetName, leave.id);
+        const existing = current.find(item => item.id === leave.id);
+        if (existing?.updatedAt && leave.updatedAt && existing.updatedAt > leave.updatedAt) {
+          throw new Error(`Leave ${leave.id} has a newer Google Sheets version; reload before saving`);
+        }
+        const serialized = serializeLeave(leave);
+        if (rowIndex === -1) await appendToSheet(sheetName, [serialized]);
+        else await updateSheet(sheetName, `A${rowIndex}:${getColumnLetter(LEAVES_HEADERS.length)}${rowIndex}`, [serialized]);
+      }
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -253,6 +308,10 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
     const rowIndex = await findRowById('HumailEli_Recruitment', candidate.id);
     const serialized = serializeCandidate(candidate);
     if (rowIndex !== -1) {
+      const current = (await this.getCandidates()).find(item => item.id === candidate.id);
+      if (current?.updatedAt && candidate.updatedAt && current.updatedAt > candidate.updatedAt) {
+        throw new Error(`Candidate ${candidate.id} has a newer Google Sheets version; reload before saving`);
+      }
       const endCol = getColumnLetter(RECRUITMENT_HEADERS.length);
       await updateSheet('HumailEli_Recruitment', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
     } else {
@@ -262,8 +321,18 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
 
   async saveCandidates(candidates: Candidate[]): Promise<void> {
     try {
-      const rows = candidates.map(serializeCandidate);
-      await updateSheet('HumailEli_Recruitment', 'A1', [RECRUITMENT_HEADERS, ...rows]);
+      await ensureSheetExists('HumailEli_Recruitment', RECRUITMENT_HEADERS);
+      const current = await this.getCandidates();
+      for (const candidate of candidates) {
+        const rowIndex = await findRowById('HumailEli_Recruitment', candidate.id);
+        const existing = current.find(item => item.id === candidate.id);
+        if (existing?.updatedAt && candidate.updatedAt && existing.updatedAt > candidate.updatedAt) {
+          throw new Error(`Candidate ${candidate.id} has a newer Google Sheets version; reload before saving`);
+        }
+        const serialized = serializeCandidate(candidate);
+        if (rowIndex === -1) await appendToSheet('HumailEli_Recruitment', [serialized]);
+        else await updateSheet('HumailEli_Recruitment', `A${rowIndex}:${getColumnLetter(RECRUITMENT_HEADERS.length)}${rowIndex}`, [serialized]);
+      }
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -281,6 +350,10 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
     const rowIndex = await findRowById('HumailEli_Departments', department.id);
     const serialized = serializeDepartment(department);
     if (rowIndex !== -1) {
+      const current = (await this.getDepartments()).find(item => item.id === department.id);
+      if (current?.updatedAt && department.updatedAt && current.updatedAt > department.updatedAt) {
+        throw new Error(`Department ${department.id} has a newer Google Sheets version; reload before saving`);
+      }
       const endCol = getColumnLetter(DEPARTMENT_HEADERS.length);
       await updateSheet('HumailEli_Departments', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
     } else {
@@ -290,8 +363,18 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
 
   async saveDepartments(depts: Department[]): Promise<void> {
     try {
-      const rows = depts.map(serializeDepartment);
-      await updateSheet('HumailEli_Departments', 'A1', [DEPARTMENT_HEADERS, ...rows]);
+      await ensureSheetExists('HumailEli_Departments', DEPARTMENT_HEADERS);
+      const current = await this.getDepartments();
+      for (const department of depts) {
+        const rowIndex = await findRowById('HumailEli_Departments', department.id);
+        const existing = current.find(item => item.id === department.id);
+        if (existing?.updatedAt && department.updatedAt && existing.updatedAt > department.updatedAt) {
+          throw new Error(`Department ${department.id} has a newer Google Sheets version; reload before saving`);
+        }
+        const serialized = serializeDepartment(department);
+        if (rowIndex === -1) await appendToSheet('HumailEli_Departments', [serialized]);
+        else await updateSheet('HumailEli_Departments', `A${rowIndex}:${getColumnLetter(DEPARTMENT_HEADERS.length)}${rowIndex}`, [serialized]);
+      }
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -306,6 +389,10 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
     const rowIndex = await findRowById('HumailEli_Designations', designation.id);
     const serialized = serializeDesignation(designation);
     if (rowIndex !== -1) {
+      const current = (await this.getDesignations()).find(item => item.id === designation.id);
+      if (current?.updatedAt && designation.updatedAt && current.updatedAt > designation.updatedAt) {
+        throw new Error(`Designation ${designation.id} has a newer Google Sheets version; reload before saving`);
+      }
       const endCol = getColumnLetter(DESIGNATION_HEADERS.length);
       await updateSheet('HumailEli_Designations', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
     } else {
@@ -315,8 +402,18 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
 
   async saveDesignations(designations: Designation[]): Promise<void> {
     try {
-      const rows = designations.map(serializeDesignation);
-      await updateSheet('HumailEli_Designations', 'A1', [DESIGNATION_HEADERS, ...rows]);
+      await ensureSheetExists('HumailEli_Designations', DESIGNATION_HEADERS);
+      const current = await this.getDesignations();
+      for (const designation of designations) {
+        const rowIndex = await findRowById('HumailEli_Designations', designation.id);
+        const existing = current.find(item => item.id === designation.id);
+        if (existing?.updatedAt && designation.updatedAt && existing.updatedAt > designation.updatedAt) {
+          throw new Error(`Designation ${designation.id} has a newer Google Sheets version; reload before saving`);
+        }
+        const serialized = serializeDesignation(designation);
+        if (rowIndex === -1) await appendToSheet('HumailEli_Designations', [serialized]);
+        else await updateSheet('HumailEli_Designations', `A${rowIndex}:${getColumnLetter(DESIGNATION_HEADERS.length)}${rowIndex}`, [serialized]);
+      }
     } catch (e: any) {
       logger.error('GoogleSheetsAdapter write failed for designations; data NOT persisted:', e?.message);
       throw e;
@@ -337,6 +434,10 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
     const rowIndex = await findRowById('HumailEli_Employee_Documents', document.id);
     const serialized = serializeEmployeeDocument(document);
     if (rowIndex !== -1) {
+      const current = (await this.getDocuments()).find(item => item.id === document.id);
+      if (current?.uploadedAt && document.uploadedAt && current.uploadedAt > document.uploadedAt) {
+        throw new Error(`Document ${document.id} has a newer Google Sheets version; reload before saving`);
+      }
       const endCol = getColumnLetter(DOCUMENTS_HEADERS.length);
       await updateSheet('HumailEli_Employee_Documents', `A${rowIndex}:${endCol}${rowIndex}`, [serialized]);
     } else {
@@ -346,8 +447,19 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
 
   async saveEmployeeDocuments(docs: EmployeeDocument[]): Promise<void> {
     try {
-      const rows = docs.map(serializeEmployeeDocument);
-      await updateSheet('HumailEli_Employee_Documents', 'A1', [DOCUMENTS_HEADERS, ...rows]);
+      const sheetName = 'HumailEli_Employee_Documents';
+      await ensureSheetExists(sheetName, DOCUMENTS_HEADERS);
+      const current = await this.getDocuments();
+      for (const document of docs) {
+        const rowIndex = await findRowById(sheetName, document.id);
+        const existing = current.find(item => item.id === document.id);
+        if (existing?.uploadedAt && document.uploadedAt && existing.uploadedAt > document.uploadedAt) {
+          throw new Error(`Document ${document.id} has a newer Google Sheets version; reload before saving`);
+        }
+        const serialized = serializeEmployeeDocument(document);
+        if (rowIndex === -1) await appendToSheet(sheetName, [serialized]);
+        else await updateSheet(sheetName, `A${rowIndex}:${getColumnLetter(DOCUMENTS_HEADERS.length)}${rowIndex}`, [serialized]);
+      }
     } catch (e: any) { logger.error('GoogleSheetsAdapter write failed; data NOT persisted:', e?.message); throw e; }
   }
 
@@ -733,9 +845,33 @@ export class GoogleSheetsAdapter extends LocalStorageAdapter {
   //  SYNC
   // ============================================================
   async syncAll(): Promise<void> {
-    return this.localFallback.syncAll();
+    await this.connect();
+    // Read every supported Google Sheets-backed collection so the following
+    // DataService refresh observes one completed synchronization boundary.
+    await Promise.all([
+      this.getEmployees(),
+      this.getAttendance(),
+      this.getPayroll(),
+      this.getLeaves(),
+      this.getCandidates(),
+      this.getDepartments(),
+      this.getDesignations(),
+      this.getEmployeeDocuments(),
+    ]);
+    logger.info('Google Sheets synchronization completed for core HR modules.');
   }
+
   async syncModule(module: string): Promise<void> {
-    return this.localFallback.syncModule(module);
+    switch (module) {
+      case 'employees': await this.getEmployees(); break;
+      case 'attendance': await this.getAttendance(); break;
+      case 'payroll': await this.getPayroll(); break;
+      case 'leaves': await this.getLeaves(); break;
+      case 'candidates': await this.getCandidates(); break;
+      case 'departments': await this.getDepartments(); break;
+      case 'designations': await this.getDesignations(); break;
+      case 'documents': await this.getEmployeeDocuments(); break;
+      default: throw new Error(`Unsupported Google Sheets module: ${module}`);
+    }
   }
 }

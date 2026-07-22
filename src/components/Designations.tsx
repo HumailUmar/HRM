@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Designation, Department, Employee } from '../types';
+import { useData } from '../contexts/DataContext';
 import { getEmployeeDesignation } from '../lib/employeeUtils';
 import { Search, Plus, Edit, Trash2, Award, Briefcase, HelpCircle, ChevronRight, X, Layers, Users, DollarSign, LayoutGrid, List, ChevronDown, CheckCircle, AlertTriangle } from 'lucide-react';
 
@@ -16,6 +17,7 @@ export default function Designations({
   departments,
   employees
 }: DesignationsProps) {
+  const data = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'hierarchy'>('list');
 
@@ -88,8 +90,10 @@ export default function Designations({
   };
 
   // Save Designation Form
-  const handleSaveDesignation = (e: React.FormEvent) => {
+  const handleSaveDesignation = async (e: React.FormEvent) => {
     e.preventDefault();
+    const previousDesignations = designations;
+    let designationToPersist: Designation | null = null;
     if (!formName.trim() || !formCode.trim()) return;
 
     if (editingDesignation) {
@@ -113,6 +117,9 @@ export default function Designations({
         }
         return d;
       }));
+      designationToPersist = designations.find(designation => designation.id === editingDesignation.id)
+        ? { ...designations.find(designation => designation.id === editingDesignation.id)!, name: formName, code: formCode.toUpperCase(), description: formDescription, departmentId: formDepartmentId || undefined, level: formLevel, category: formCategory, reportingToDesignationId: formReportsToId || undefined, minSalary: formMinSalary ? Number(formMinSalary) : undefined, maxSalary: formMaxSalary ? Number(formMaxSalary) : undefined, isActive: formIsActive, updatedAt: new Date().toISOString() }
+        : null;
     } else {
       // Add
       const newDsg: Designation = {
@@ -131,6 +138,15 @@ export default function Designations({
         updatedAt: new Date().toISOString()
       };
       setDesignations([...designations, newDsg]);
+      designationToPersist = newDsg;
+    }
+    if (designationToPersist) {
+      try {
+        await data.saveDesignation(designationToPersist);
+      } catch (error) {
+        setDesignations(previousDesignations);
+        return;
+      }
     }
     setShowAddEditModal(false);
   };
@@ -142,8 +158,9 @@ export default function Designations({
   };
 
   // Confirm delete
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!dsgToDelete) return;
+    const previousDesignations = designations;
 
     // Delete designation
     const updatedDesignations = designations
@@ -155,6 +172,12 @@ export default function Designations({
         return d;
       });
     setDesignations(updatedDesignations);
+    try {
+      await data.saveDesignation({ ...dsgToDelete, isActive: false, updatedAt: new Date().toISOString() });
+    } catch (error) {
+      setDesignations(previousDesignations);
+      return;
+    }
 
     setDsgToDelete(null);
   };

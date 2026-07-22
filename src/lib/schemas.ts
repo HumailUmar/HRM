@@ -10,7 +10,18 @@ export const EmployeeSchema = z.object({
   department: z.string().max(100).optional(),
   baseSalary: z.number().min(0).default(0),
   joiningDate: z.string().max(10).optional(),
-  status: z.string().max(50).default('Active'),
+  leaveStartDate: z.string().max(10).optional(),
+  leaveEndDate: z.string().max(10).optional(),
+  suspensionStartDate: z.string().max(10).optional(),
+  suspensionReason: z.string().max(500).optional(),
+  resignationDate: z.string().max(10).optional(),
+  lastWorkingDate: z.string().max(10).optional(),
+  retirementDate: z.string().max(10).optional(),
+  terminationDate: z.string().max(10).optional(),
+  terminationReason: z.string().max(500).optional(),
+  contractStartDate: z.string().max(10).optional(),
+  contractEndDate: z.string().max(10).optional(),
+  status: z.enum(['Active', 'Onboarding', 'On Leave', 'Suspended', 'Probation', 'Resigned', 'Retired', 'Deceased', 'Contract Expired', 'Terminated']).default('Active'),
   seatNumber: z.number().int().min(0).default(0),
   punchCode: z.string().max(50).optional(),
   personal: z.object({
@@ -64,6 +75,26 @@ export const EmployeeSchema = z.object({
     welcomeEmailSent: z.boolean().optional(),
     feedbackSubmitted: z.boolean().optional(),
   }).optional(),
+}).superRefine((employee, ctx) => {
+  const status = employee.status;
+  const employment = employee.employment;
+  const requiredByStatus: Record<string, string[]> = {
+    'On Leave': ['leaveStartDate', 'leaveEndDate'],
+    Suspended: ['suspensionStartDate', 'suspensionReason'],
+    Resigned: ['resignationDate', 'lastWorkingDate'],
+    Retired: ['retirementDate'],
+    Terminated: ['terminationDate', 'terminationReason'],
+    'Contract Expired': ['contractEndDate'],
+  };
+  const required = requiredByStatus[status] || [];
+  for (const field of required) {
+    if (!(employee as Record<string, unknown>)[field] && !(employment as Record<string, unknown> | undefined)?.[field]) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: `${field} is required for status ${status}` });
+    }
+  }
+  if (employment?.contractStartDate && employment.contractEndDate && employment.contractEndDate < employment.contractStartDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['employment', 'contractEndDate'], message: 'Contract end date must not precede contract start date' });
+  }
 });
 
 // --- ATTENDANCE ---

@@ -315,10 +315,17 @@ export default function Attendance({
       }
 
       // Add new records to attendance
+      const previousAttendance = attendance;
       const updatedAttendance = [...attendance, ...newRecords];
       setAttendance(updatedAttendance);
-      await dataService.saveAttendance(updatedAttendance);
-      if (propsSetAttendance) propsSetAttendance(updatedAttendance);
+      try {
+        await dataService.saveAttendance(updatedAttendance);
+        if (propsSetAttendance) propsSetAttendance(updatedAttendance);
+      } catch (saveError) {
+        setAttendance(previousAttendance);
+        if (propsSetAttendance) propsSetAttendance(previousAttendance);
+        throw saveError;
+      }
 
       setSyncStatus({
         message: `✅ Successfully synced ${newRecords.length} new attendance records from ${activeDevice.name}. ${punches.length} total punches processed.`,

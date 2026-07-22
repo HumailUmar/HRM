@@ -101,19 +101,23 @@ export default function Recruitment({
   const [activeScreeningTab, setActiveScreeningTab] = useState<'chatbot' | 'video' | 'voice' | 'scorecard'>('chatbot');
 
   const persistCandidates = async (nextCandidates: Candidate[]) => {
+    const previous = candidates;
     setCandidates(nextCandidates);
     try {
       await data.saveCandidates(nextCandidates);
     } catch (error) {
+      setCandidates(previous);
       logger.error('Failed to persist candidates:', error);
     }
   };
 
   const persistEmployees = async (nextEmployees: Employee[]) => {
+    const previous = employees;
     setEmployees(nextEmployees);
     try {
       await data.saveEmployees(nextEmployees);
     } catch (error) {
+      setEmployees(previous);
       logger.error('Failed to persist employees:', error);
     }
   };
@@ -608,7 +612,8 @@ export default function Recruitment({
     const updatedCandidates = candidates.map(c => 
       c.id === candId ? { ...c, status: 'Hired' as const } : c
     );
-    void persistCandidates(updatedCandidates);
+    // Candidate status is committed only after the employee and onboarding records
+    // have been persisted successfully.
 
     // 2. Map candidate data to Employee
     const occupiedSeats = employees.filter(e => e.status !== 'Terminated').map(e => e.employment.seatNumber);
@@ -723,10 +728,13 @@ export default function Recruitment({
       completed: false
     }));
 
-    // Persist the new employee and onboarding tasks.
-    void persistEmployees([newEmployee, ...employees]);
+    // Persist the new employee and onboarding tasks before changing the
+    // candidate status, so an incomplete hire cannot be presented as hired.
+    await data.saveEmployee(newEmployee);
+    setEmployees([newEmployee, ...employees]);
     const existingTasks = await data.getOnboardingTasks();
     await data.saveOnboardingTasks([...legacyOnboardingTasks, ...existingTasks]);
+    await persistCandidates(updatedCandidates);
 
     if (!settings.isMockMode) {
       try {

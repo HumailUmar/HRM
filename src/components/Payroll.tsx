@@ -147,24 +147,30 @@ export default function Payroll({
   };
 
   // Save/Commit Payroll to Google Sheet
-  const handleCommitPayroll = () => {
+  const handleCommitPayroll = async () => {
     if (processedRecords.length === 0) return;
 
     const confirmed = window.confirm(`Save and commit payroll run for ${selectedMonth}? This will append ${processedRecords.length} records to the Google Sheet: "${settings.googleSheets.payrollSheet}".`);
     if (!confirmed) return;
 
+    const previousPayrolls = payrolls;
     const cleanedPayrolls = payrolls.filter(p => p.month !== selectedMonth);
     const finalized = processedRecords.map(p => ({ ...p, status: 'Paid' as const }));
+    const updatedPayrolls = [...finalized, ...cleanedPayrolls];
 
-    setPayrolls([...finalized, ...cleanedPayrolls]);
-    setProcessedRecords([]);
-    setHasProcessed(false);
-
-    finalized.forEach(record => {
-      data.addSheetLog(settings.googleSheets.payrollSheet, "INSERT", record);
-    });
-
-    alert(`Salary sheet successfully saved! Dispatched rows to "${settings.googleSheets.payrollSheet}" sheet sync.`);
+    setPayrolls(updatedPayrolls);
+    try {
+      await data.savePayroll(updatedPayrolls);
+      setProcessedRecords([]);
+      setHasProcessed(false);
+      finalized.forEach(record => {
+        void data.addSheetLog(settings.googleSheets.payrollSheet, 'INSERT', record);
+      });
+      alert(`Salary sheet successfully saved! Dispatched rows to "${settings.googleSheets.payrollSheet}" sheet sync.`);
+    } catch (error) {
+      setPayrolls(previousPayrolls);
+      alert(error instanceof Error ? error.message : 'Payroll save failed. Previous payroll state was restored.');
+    }
   };
 
   const historicRecords = useMemo(() => {

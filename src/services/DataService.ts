@@ -20,6 +20,7 @@ import {
   LegacyOnboardingTask,
   OnboardingTemplate,
   JobDescription,
+  SuccessionPlan,
   StageTemplate,
   InterviewPanel,
   EvaluationScorecard,
@@ -155,6 +156,19 @@ export class DataService {
     return typeof navigator !== 'undefined' && navigator.onLine === false;
   }
 
+  private validatePersistable<T extends { id?: unknown }>(entity: string, value: T): T {
+    if (!value || typeof value !== 'object' || typeof value.id !== 'string' || value.id.trim().length === 0) {
+      throw new Error(`Validation failed for ${entity}: a non-empty id is required`);
+    }
+    try { JSON.stringify(value); } catch { throw new Error(`Validation failed for ${entity}: value is not serializable`); }
+    return value;
+  }
+
+  private validatePersistableArray<T extends { id?: unknown }>(entity: string, values: T[]): T[] {
+    if (!Array.isArray(values)) throw new Error(`Validation failed for ${entity}: expected an array`);
+    return values.map(value => this.validatePersistable(entity, value));
+  }
+
   // ---- Employees ----
   async getEmployees(): Promise<Employee[]> {
     const adapter = this.getAdapter();
@@ -195,8 +209,14 @@ export class DataService {
     }
 
     const adapter = this.getAdapter();
+    const validated = this.validate('employee', employee);
+    const previous = await adapter.getEmployee(validated.id);
     try {
-      const saved = await adapter.saveEmployee(this.validate('employee', employee));
+      const saved = await adapter.saveEmployee(validated);
+      const history = typeof (adapter as any).generateEmployeeDiff === 'function'
+        ? this.generateEmployeeDiff(previous, saved, 'system', 'System', previous ? 'UPDATE' : 'CREATE', 'API') as EmployeeHistoryEntry[]
+        : [];
+      if (typeof (adapter as any).addEmployeeHistory === 'function') await Promise.all(history.map(entry => this.addEmployeeHistory(entry)));
       showToast('Employee saved successfully.', 'success');
       return saved;
     } catch (error) {
@@ -216,7 +236,15 @@ export class DataService {
     }
 
     try {
-      await this.getAdapter().saveEmployees(this.validateArray('employee', employees as Employee[]) as Employee[]);
+      const validated = this.validateArray('employee', employees as Employee[]) as Employee[];
+      const adapter = this.getAdapter();
+      const previous = await adapter.getEmployees();
+      await adapter.saveEmployees(validated);
+      const byId = new Map(previous.map(employee => [employee.id, employee]));
+      const history = typeof (adapter as any).generateEmployeeDiff === 'function'
+        ? validated.flatMap(employee => this.generateEmployeeDiff(byId.get(employee.id) ?? null, employee, 'system', 'System', byId.has(employee.id) ? 'BULK_UPDATE' : 'CREATE', 'BULK_IMPORT') as EmployeeHistoryEntry[])
+        : [];
+      if (typeof (adapter as any).addEmployeeHistory === 'function') await Promise.all(history.map(entry => this.addEmployeeHistory(entry)));
       showToast('Employees saved successfully.', 'success');
     } catch (error) {
       showToast('Failed to save employees. Check connection.', 'error');
@@ -255,7 +283,9 @@ export class DataService {
   }
 
   async saveAttendanceRecord(record: AttendanceRecord): Promise<void> {
-    return this.getAdapter().saveAttendanceRecord(this.validate('attendance', record));
+    const validated = this.validate('attendance', record);
+    if (this.isOffline()) { enqueueRequest({ endpoint: '/api/v1/attendance', method: 'POST', body: validated }); return; }
+    return this.getAdapter().saveAttendanceRecord(validated);
   }
 
   // ---- Leave ----
@@ -275,7 +305,9 @@ export class DataService {
     if (!leave) {
       throw new Error('DataService.saveLeave called with null/undefined leave');
     }
-    return this.getAdapter().saveLeave(this.validate('leave', leave));
+    const validated = this.validate('leave', leave);
+    if (this.isOffline()) { enqueueRequest({ endpoint: '/api/v1/leaves', method: 'POST', body: validated }); return; }
+    return this.getAdapter().saveLeave(validated);
   }
 
   async saveLeaves(leaves: LeaveRecord[]): Promise<void> {
@@ -323,7 +355,9 @@ export class DataService {
   }
 
   async saveCandidate(candidate: Candidate): Promise<void> {
-    return this.getAdapter().saveCandidate(this.validate('candidate', candidate));
+    const validated = this.validate('candidate', candidate);
+    if (this.isOffline()) { enqueueRequest({ endpoint: '/api/v1/candidates', method: 'POST', body: validated }); return; }
+    return this.getAdapter().saveCandidate(validated);
   }
 
   async saveCandidates(candidates: Candidate[]): Promise<void> {
@@ -339,85 +373,85 @@ export class DataService {
   }
 
   async getStageTemplates(): Promise<StageTemplate[]> {
-    return this.getAdapter().getStageTemplates();
+    return this.validatePersistableArray('stage template', await this.getAdapter().getStageTemplates());
   }
 
   async saveStageTemplates(templates: StageTemplate[]): Promise<void> {
-    return this.getAdapter().saveStageTemplates(templates);
+    return this.getAdapter().saveStageTemplates(this.validatePersistableArray('stage template', templates));
   }
 
   async getInterviewPanels(): Promise<InterviewPanel[]> {
-    return this.getAdapter().getInterviewPanels();
+    return this.validatePersistableArray('interview panel', await this.getAdapter().getInterviewPanels());
   }
 
   async saveInterviewPanels(panels: InterviewPanel[]): Promise<void> {
-    return this.getAdapter().saveInterviewPanels(panels);
+    return this.getAdapter().saveInterviewPanels(this.validatePersistableArray('interview panel', panels));
   }
 
   async getScorecards(): Promise<EvaluationScorecard[]> {
-    return this.getAdapter().getScorecards();
+    return this.validatePersistableArray('scorecard', await this.getAdapter().getScorecards());
   }
 
   async saveScorecards(scorecards: EvaluationScorecard[]): Promise<void> {
-    return this.getAdapter().saveScorecards(scorecards);
+    return this.getAdapter().saveScorecards(this.validatePersistableArray('scorecard', scorecards));
   }
 
   async getJDMatches(): Promise<JDResumeMatch[]> {
-    return this.getAdapter().getJDMatches();
+    return this.validatePersistableArray('JD match', await this.getAdapter().getJDMatches());
   }
 
   async saveJDMatches(matches: JDResumeMatch[]): Promise<void> {
-    return this.getAdapter().saveJDMatches(matches);
+    return this.getAdapter().saveJDMatches(this.validatePersistableArray('JD match', matches));
   }
 
   // ---- Performance ----
   async getPerformanceReviews(): Promise<PerformanceReview[]> {
-    return this.getAdapter().getPerformanceReviews();
+    return this.validatePersistableArray('performance review', await this.getAdapter().getPerformanceReviews());
   }
 
   async savePerformanceReview(review: PerformanceReview): Promise<void> {
-    return this.getAdapter().savePerformanceReview(review);
+    return this.getAdapter().savePerformanceReview(this.validatePersistable('performance review', review));
   }
 
   async savePerformanceReviews(reviews: PerformanceReview[]): Promise<void> {
-    return this.getAdapter().savePerformanceReviews(reviews);
+    return this.getAdapter().savePerformanceReviews(this.validatePersistableArray('performance review', reviews));
   }
 
   async getPerformanceGoals(): Promise<PerformanceGoal[]> {
-    return this.getAdapter().getPerformanceGoals();
+    return this.validatePersistableArray('performance goal', await this.getAdapter().getPerformanceGoals());
   }
 
   async savePerformanceGoal(goal: PerformanceGoal): Promise<void> {
-    return this.getAdapter().savePerformanceGoal(goal);
+    return this.getAdapter().savePerformanceGoal(this.validatePersistable('performance goal', goal));
   }
 
   async savePerformanceGoals(goals: PerformanceGoal[]): Promise<void> {
-    return this.getAdapter().savePerformanceGoals(goals);
+    return this.getAdapter().savePerformanceGoals(this.validatePersistableArray('performance goal', goals));
   }
 
   // ---- Training ----
   async getTrainingModules(): Promise<TrainingModule[]> {
-    return this.getAdapter().getTrainingModules();
+    return this.validatePersistableArray('training module', await this.getAdapter().getTrainingModules());
   }
 
   async saveTrainingModule(module: TrainingModule): Promise<void> {
-    return this.getAdapter().saveTrainingModule(module);
+    return this.getAdapter().saveTrainingModule(this.validatePersistable('training module', module));
   }
 
   async saveTrainingModules(modules: TrainingModule[]): Promise<void> {
-    return this.getAdapter().saveTrainingModules(modules);
+    return this.getAdapter().saveTrainingModules(this.validatePersistableArray('training module', modules));
   }
 
   async getTrainingAssignments(): Promise<TrainingAssignment[]> {
-    return this.getAdapter().getTrainingAssignments();
+    return this.validatePersistableArray('training assignment', await this.getAdapter().getTrainingAssignments());
   }
 
   async saveTrainingAssignment(assignment: TrainingAssignment): Promise<void> {
-    return this.getAdapter().saveTrainingAssignment(assignment);
+    return this.getAdapter().saveTrainingAssignment(this.validatePersistable('training assignment', assignment));
   }
 
   async saveTrainingAssignments(assignments: TrainingAssignment[]): Promise<void> {
-    return this.getAdapter().saveTrainingAssignments(assignments);
+    return this.getAdapter().saveTrainingAssignments(this.validatePersistableArray('training assignment', assignments));
   }
 
   async getTrainingQuizzes(): Promise<TrainingQuiz[]> {
@@ -459,19 +493,31 @@ export class DataService {
 
   // ---- Job Descriptions / Onboarding ----
   async getOnboardingTasks(): Promise<LegacyOnboardingTask[]> {
-    return this.getAdapter().getOnboardingTasks();
+    return this.validatePersistableArray('onboarding task', await this.getAdapter().getOnboardingTasks());
   }
 
   async getOnboardingTemplates(): Promise<OnboardingTemplate[]> {
-    return this.getAdapter().getOnboardingTemplates();
+    return this.validatePersistableArray('onboarding template', await this.getAdapter().getOnboardingTemplates());
+  }
+
+  async saveOnboardingTasks(tasks: LegacyOnboardingTask[]): Promise<void> {
+    return this.getAdapter().saveOnboardingTasks(this.validatePersistableArray('onboarding task', tasks));
+  }
+
+  async getSuccessionPlans(): Promise<SuccessionPlan[]> {
+    return this.validatePersistableArray('succession plan', await this.getAdapter().getSuccessionPlans());
+  }
+
+  async saveSuccessionPlans(plans: SuccessionPlan[]): Promise<void> {
+    return this.getAdapter().saveSuccessionPlans(this.validatePersistableArray('succession plan', plans));
   }
 
   async getJobDescriptions(): Promise<JobDescription[]> {
-    return this.getAdapter().getJobDescriptions();
+    return this.validatePersistableArray('job description', await this.getAdapter().getJobDescriptions());
   }
 
   async saveJobDescriptions(jobs: JobDescription[]): Promise<void> {
-    return this.getAdapter().saveJobDescriptions(jobs);
+    return this.getAdapter().saveJobDescriptions(this.validatePersistableArray('job description', jobs));
   }
 
   // ---- Departments & Designations ----
@@ -513,19 +559,19 @@ export class DataService {
   }
 
   async getBiometricPunchRecords(): Promise<BiometricPunchRecord[]> {
-    return this.getAdapter().getBiometricPunchRecords();
+    return this.validatePersistableArray('biometric punch', await this.getAdapter().getBiometricPunchRecords());
   }
 
   async saveBiometricPunchRecords(records: BiometricPunchRecord[]): Promise<void> {
-    return this.getAdapter().saveBiometricPunchRecords(records);
+    return this.getAdapter().saveBiometricPunchRecords(this.validatePersistableArray('biometric punch', records));
   }
 
   async getBiometricSyncLogs(): Promise<BiometricSyncLog[]> {
-    return this.getAdapter().getBiometricSyncLogs();
+    return this.validatePersistableArray('biometric sync log', await this.getAdapter().getBiometricSyncLogs());
   }
 
   async saveBiometricSyncLogs(logs: BiometricSyncLog[]): Promise<void> {
-    return this.getAdapter().saveBiometricSyncLogs(logs);
+    return this.getAdapter().saveBiometricSyncLogs(this.validatePersistableArray('biometric sync log', logs));
   }
 
   // ---- Storage Helpers / Logging ----
@@ -564,11 +610,11 @@ export class DataService {
   }
 
   async getExitRecords(): Promise<ExitRecord[]> {
-    return this.getAdapter().getExitRecords();
+    return this.validatePersistableArray('exit record', await this.getAdapter().getExitRecords());
   }
 
   async saveExitRecords(records: ExitRecord[]): Promise<void> {
-    return this.getAdapter().saveExitRecords(records);
+    return this.getAdapter().saveExitRecords(this.validatePersistableArray('exit record', records));
   }
 
   // ---- Exit Templates ----
@@ -581,11 +627,11 @@ export class DataService {
   }
 
   async getExitProcessStages(): Promise<ExitProcessStage[]> {
-    return this.getAdapter().getExitProcessStages();
+    return this.validatePersistableArray('exit process stage', await this.getAdapter().getExitProcessStages());
   }
 
   async saveExitProcessStages(stages: ExitProcessStage[]): Promise<void> {
-    return this.getAdapter().saveExitProcessStages(stages);
+    return this.getAdapter().saveExitProcessStages(this.validatePersistableArray('exit process stage', stages));
   }
 
   async getSettlementConfig(): Promise<SettlementConfig | null> {
@@ -597,99 +643,99 @@ export class DataService {
   }
 
   async getPerformanceReviewCycles(): Promise<PerformanceReviewCycle[]> {
-    return this.getAdapter().getPerformanceReviewCycles();
+    return this.validatePersistableArray('performance review cycle', await this.getAdapter().getPerformanceReviewCycles());
   }
 
   async savePerformanceReviewCycles(cycles: PerformanceReviewCycle[]): Promise<void> {
-    return this.getAdapter().savePerformanceReviewCycles(cycles);
+    return this.getAdapter().savePerformanceReviewCycles(this.validatePersistableArray('performance review cycle', cycles));
   }
 
   async getPerformanceReviewTemplates(): Promise<PerformanceReviewTemplate[]> {
-    return this.getAdapter().getPerformanceReviewTemplates();
+    return this.validatePersistableArray('performance review template', await this.getAdapter().getPerformanceReviewTemplates());
   }
 
   async savePerformanceReviewTemplates(templates: PerformanceReviewTemplate[]): Promise<void> {
-    return this.getAdapter().savePerformanceReviewTemplates(templates);
+    return this.getAdapter().savePerformanceReviewTemplates(this.validatePersistableArray('performance review template', templates));
   }
 
   async getTrainingSubmissions(): Promise<TrainingSubmission[]> {
-    return this.getAdapter().getTrainingSubmissions();
+    return this.validatePersistableArray('training submission', await this.getAdapter().getTrainingSubmissions());
   }
 
   async saveTrainingSubmissions(submissions: TrainingSubmission[]): Promise<void> {
-    return this.getAdapter().saveTrainingSubmissions(submissions);
+    return this.getAdapter().saveTrainingSubmissions(this.validatePersistableArray('training submission', submissions));
   }
 
   async getPeerAssignments(): Promise<PeerAssignment[]> {
-    return this.getAdapter().getPeerAssignments();
+    return this.validatePersistableArray('peer assignment', await this.getAdapter().getPeerAssignments());
   }
 
   async savePeerAssignments(assignments: PeerAssignment[]): Promise<void> {
-    return this.getAdapter().savePeerAssignments(assignments);
+    return this.getAdapter().savePeerAssignments(this.validatePersistableArray('peer assignment', assignments));
   }
 
   async getTrainingRequests(): Promise<TrainingRequest[]> {
-    return this.getAdapter().getTrainingRequests();
+    return this.validatePersistableArray('training request', await this.getAdapter().getTrainingRequests());
   }
 
   async saveTrainingRequests(requests: TrainingRequest[]): Promise<void> {
-    return this.getAdapter().saveTrainingRequests(requests);
+    return this.getAdapter().saveTrainingRequests(this.validatePersistableArray('training request', requests));
   }
 
   async getTrainingMentorships(): Promise<TrainingMentorship[]> {
-    return this.getAdapter().getTrainingMentorships();
+    return this.validatePersistableArray('training mentorship', await this.getAdapter().getTrainingMentorships());
   }
 
   async saveTrainingMentorships(mentorships: TrainingMentorship[]): Promise<void> {
-    return this.getAdapter().saveTrainingMentorships(mentorships);
+    return this.getAdapter().saveTrainingMentorships(this.validatePersistableArray('training mentorship', mentorships));
   }
 
   async getTrainingCheckIns(): Promise<TrainingCheckIn[]> {
-    return this.getAdapter().getTrainingCheckIns();
+    return this.validatePersistableArray('training check-in', await this.getAdapter().getTrainingCheckIns());
   }
 
   async saveTrainingCheckIns(checkIns: TrainingCheckIn[]): Promise<void> {
-    return this.getAdapter().saveTrainingCheckIns(checkIns);
+    return this.getAdapter().saveTrainingCheckIns(this.validatePersistableArray('training check-in', checkIns));
   }
 
   async getTrainingMessages(): Promise<TrainingMessage[]> {
-    return this.getAdapter().getTrainingMessages();
+    return this.validatePersistableArray('training message', await this.getAdapter().getTrainingMessages());
   }
 
   async saveTrainingMessages(messages: TrainingMessage[]): Promise<void> {
-    return this.getAdapter().saveTrainingMessages(messages);
+    return this.getAdapter().saveTrainingMessages(this.validatePersistableArray('training message', messages));
   }
 
   async getSalaryComponents(): Promise<SalaryComponent[]> {
-    return this.getAdapter().getSalaryComponents();
+    return this.validatePersistableArray('salary component', await this.getAdapter().getSalaryComponents());
   }
 
   async saveSalaryComponents(components: SalaryComponent[]): Promise<void> {
-    return this.getAdapter().saveSalaryComponents(components);
+    return this.getAdapter().saveSalaryComponents(this.validatePersistableArray('salary component', components));
   }
 
   async getSalaryStructures(): Promise<SalaryStructure[]> {
-    return this.getAdapter().getSalaryStructures();
+    return this.validatePersistableArray('salary structure', await this.getAdapter().getSalaryStructures());
   }
 
   async saveSalaryStructures(structures: SalaryStructure[]): Promise<void> {
-    return this.getAdapter().saveSalaryStructures(structures);
+    return this.getAdapter().saveSalaryStructures(this.validatePersistableArray('salary structure', structures));
   }
 
   async getPayGrades(): Promise<PayGrade[]> {
-    return this.getAdapter().getPayGrades();
+    return this.validatePersistableArray('pay grade', await this.getAdapter().getPayGrades());
   }
 
   async savePayGrades(payGrades: PayGrade[]): Promise<void> {
-    return this.getAdapter().savePayGrades(payGrades);
+    return this.getAdapter().savePayGrades(this.validatePersistableArray('pay grade', payGrades));
   }
 
   async getSalaryRevisions(): Promise<SalaryRevision[]> {
-    return this.getAdapter().getSalaryRevisions();
+    return this.validatePersistableArray('salary revision', await this.getAdapter().getSalaryRevisions());
   }
 
   async saveSalaryRevisions(revisions: SalaryRevision[]): Promise<void> {
-    return this.getAdapter().saveSalaryRevisions(revisions);
+    return this.getAdapter().saveSalaryRevisions(this.validatePersistableArray('salary revision', revisions));
   }
 
   async getSalaryRevisionsByEmployee(employeeId: string): Promise<SalaryRevision[]> {
@@ -697,7 +743,7 @@ export class DataService {
   }
 
   async saveSalaryStructure(structure: SalaryStructure): Promise<void> {
-    return this.getAdapter().saveSalaryStructure(structure);
+    return this.getAdapter().saveSalaryStructure(this.validatePersistable('salary structure', structure));
   }
 
   async getSalaryStructureByEmployee(employeeId: string): Promise<SalaryStructure | null> {
@@ -709,91 +755,91 @@ export class DataService {
   }
 
   async getShifts(): Promise<Shift[]> {
-    return this.getAdapter().getShifts();
+    return this.validatePersistableArray('shift', await this.getAdapter().getShifts());
   }
 
   async saveShifts(shifts: Shift[]): Promise<void> {
-    return this.getAdapter().saveShifts(shifts);
+    return this.getAdapter().saveShifts(this.validatePersistableArray('shift', shifts));
   }
 
   async getShiftAssignments(): Promise<ShiftAssignment[]> {
-    return this.getAdapter().getShiftAssignments();
+    return this.validatePersistableArray('shift assignment', await this.getAdapter().getShiftAssignments());
   }
 
   async saveShiftAssignments(assignments: ShiftAssignment[]): Promise<void> {
-    return this.getAdapter().saveShiftAssignments(assignments);
+    return this.getAdapter().saveShiftAssignments(this.validatePersistableArray('shift assignment', assignments));
   }
 
   async getShiftSwapRequests(): Promise<ShiftSwapRequest[]> {
-    return this.getAdapter().getShiftSwapRequests();
+    return this.validatePersistableArray('shift swap request', await this.getAdapter().getShiftSwapRequests());
   }
 
   async saveShiftSwapRequests(requests: ShiftSwapRequest[]): Promise<void> {
-    return this.getAdapter().saveShiftSwapRequests(requests);
+    return this.getAdapter().saveShiftSwapRequests(this.validatePersistableArray('shift swap request', requests));
   }
 
   async getShiftTemplates(): Promise<ShiftTemplate[]> {
-    return this.getAdapter().getShiftTemplates();
+    return this.validatePersistableArray('shift template', await this.getAdapter().getShiftTemplates());
   }
 
   async saveShiftTemplates(templates: ShiftTemplate[]): Promise<void> {
-    return this.getAdapter().saveShiftTemplates(templates);
+    return this.getAdapter().saveShiftTemplates(this.validatePersistableArray('shift template', templates));
   }
 
   async getCurrencies(): Promise<Currency[]> {
-    return this.getAdapter().getCurrencies();
+    return this.validatePersistableArray('currency', await this.getAdapter().getCurrencies());
   }
 
   async saveCurrencies(currencies: Currency[]): Promise<void> {
-    return this.getAdapter().saveCurrencies(currencies);
+    return this.getAdapter().saveCurrencies(this.validatePersistableArray('currency', currencies));
   }
 
   async getTaxRules(): Promise<TaxRule[]> {
-    return this.getAdapter().getTaxRules();
+    return this.validatePersistableArray('tax rule', await this.getAdapter().getTaxRules());
   }
 
   async saveTaxRules(rules: TaxRule[]): Promise<void> {
-    return this.getAdapter().saveTaxRules(rules);
+    return this.getAdapter().saveTaxRules(this.validatePersistableArray('tax rule', rules));
   }
 
   async getStatutoryDeductions(): Promise<StatutoryDeduction[]> {
-    return this.getAdapter().getStatutoryDeductions();
+    return this.validatePersistableArray('statutory deduction', await this.getAdapter().getStatutoryDeductions());
   }
 
   async saveStatutoryDeductions(deductions: StatutoryDeduction[]): Promise<void> {
-    return this.getAdapter().saveStatutoryDeductions(deductions);
+    return this.getAdapter().saveStatutoryDeductions(this.validatePersistableArray('statutory deduction', deductions));
   }
 
   async getPayrollCalculations(): Promise<PayrollCalculation[]> {
-    return this.getAdapter().getPayrollCalculations();
+    return this.validatePersistableArray('payroll calculation', await this.getAdapter().getPayrollCalculations());
   }
 
   async savePayrollCalculations(calculations: PayrollCalculation[]): Promise<void> {
-    return this.getAdapter().savePayrollCalculations(calculations);
+    return this.getAdapter().savePayrollCalculations(this.validatePersistableArray('payroll calculation', calculations));
   }
 
   async getLeavePolicies(): Promise<LeavePolicy[]> {
-    return this.getAdapter().getLeavePolicies();
+    return this.validatePersistableArray('leave policy', await this.getAdapter().getLeavePolicies());
   }
 
   async saveLeavePolicies(policies: LeavePolicy[]): Promise<void> {
-    return this.getAdapter().saveLeavePolicies(policies);
+    return this.getAdapter().saveLeavePolicies(this.validatePersistableArray('leave policy', policies));
   }
 
   async getLeaveTypeConfigs(): Promise<any[]> {
-    return this.getAdapter().getLeaveTypeConfigs();
+    return this.validatePersistableArray('leave type config', await this.getAdapter().getLeaveTypeConfigs());
   }
 
   async saveLeaveTypeConfigs(configs: any[]): Promise<void> {
-    return this.getAdapter().saveLeaveTypeConfigs(configs);
+    return this.getAdapter().saveLeaveTypeConfigs(this.validatePersistableArray('leave type config', configs));
   }
 
   async getRecruitmentAnalytics(): Promise<RecruitmentAnalytics[]> {
-    return this.getAdapter().getRecruitmentAnalytics();
+    return this.validatePersistableArray('recruitment analytics', await this.getAdapter().getRecruitmentAnalytics());
   }
 
   async saveRecruitmentAnalytics(analytics: RecruitmentAnalytics[]): Promise<void> {
-    return this.getAdapter().saveRecruitmentAnalytics(analytics);
+    return this.getAdapter().saveRecruitmentAnalytics(this.validatePersistableArray('recruitment analytics', analytics));
   }
 
   async getHires(): Promise<HireDetails[]> {
@@ -805,51 +851,51 @@ export class DataService {
   }
 
   async getInterviewSchedules(): Promise<InterviewSchedule[]> {
-    return this.getAdapter().getInterviewSchedules();
+    return this.validatePersistableArray('interview schedule', await this.getAdapter().getInterviewSchedules());
   }
 
   async saveInterviewSchedules(schedules: InterviewSchedule[]): Promise<void> {
-    return this.getAdapter().saveInterviewSchedules(schedules);
+    return this.getAdapter().saveInterviewSchedules(this.validatePersistableArray('interview schedule', schedules));
   }
 
   async getOrgChartNodes(): Promise<OrgChartNode[]> {
-    return this.getAdapter().getOrgChartNodes();
+    return this.validatePersistableArray('org chart node', await this.getAdapter().getOrgChartNodes());
   }
 
   async saveOrgChartNodes(nodes: OrgChartNode[]): Promise<void> {
-    return this.getAdapter().saveOrgChartNodes(nodes);
+    return this.getAdapter().saveOrgChartNodes(this.validatePersistableArray('org chart node', nodes));
   }
 
   async getPayslips(): Promise<any[]> {
-    return this.getAdapter().getPayslips();
+    return this.validatePersistableArray('payslip', await this.getAdapter().getPayslips());
   }
 
   async savePayslips(payslips: any[]): Promise<void> {
-    return this.getAdapter().savePayslips(payslips);
+    return this.getAdapter().savePayslips(this.validatePersistableArray('payslip', payslips));
   }
 
   async getNotifications(): Promise<any[]> {
-    return this.getAdapter().getNotifications();
+    return this.validatePersistableArray('notification', await this.getAdapter().getNotifications());
   }
 
   async saveNotifications(notifications: any[]): Promise<void> {
-    return this.getAdapter().saveNotifications(notifications);
+    return this.getAdapter().saveNotifications(this.validatePersistableArray('notification', notifications));
   }
 
   async getUsers(): Promise<any[]> {
-    return this.getAdapter().getUsers();
+    return this.validatePersistableArray('user', await this.getAdapter().getUsers());
   }
 
   async saveUsers(users: any[]): Promise<void> {
-    return this.getAdapter().saveUsers(users);
+    return this.getAdapter().saveUsers(this.validatePersistableArray('user', users));
   }
 
   async getStatusHistory(): Promise<EmployeeStatusHistory[]> {
-    return this.getAdapter().getStatusHistory();
+    return this.validatePersistableArray('status history', await this.getAdapter().getStatusHistory());
   }
 
   async saveStatusHistory(history: EmployeeStatusHistory[]): Promise<void> {
-    return this.getAdapter().saveStatusHistory(history);
+    return this.getAdapter().saveStatusHistory(this.validatePersistableArray('status history', history));
   }
 
   async getSheetLogs(): Promise<SheetLog[]> {

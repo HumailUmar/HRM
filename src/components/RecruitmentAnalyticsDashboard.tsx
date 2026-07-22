@@ -129,7 +129,7 @@ export default function RecruitmentAnalyticsDashboard({ candidates, jobDescripti
             Filters
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               const analyticsId = `ra_${Date.now()}`;
               const snapshot = {
                 id: analyticsId,

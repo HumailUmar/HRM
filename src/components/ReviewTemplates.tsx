@@ -53,7 +53,7 @@ export default function ReviewTemplates() {
   };
 
   // Save template
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingTemplate || !editingTemplate.name.trim()) {
       alert('Template name is required.');
       return;

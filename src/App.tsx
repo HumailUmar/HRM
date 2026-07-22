@@ -39,7 +39,7 @@ const EmployeePortal = lazy(() => import('./components/EmployeePortal'));
 const ManagerPortal = lazy(() => import('./components/ManagerPortal'));
 
 
-import { getToken, getUser, setAuthData, clearAuthData, verifySession, hasToken, googleSignIn, logout } from './lib/auth';
+import { setAuthData, verifySession, hasToken, googleSignIn, logout } from './lib/auth';
 import { Employee, AttendanceRecord, Candidate, PayrollRecord, AppSettings, LeaveRecord, LegacyOnboardingTask, OnboardingTemplate, Department, Designation, EmployeeDocument, JobDescription } from './types';
 import { getSettings as loadStoredSettings, saveSettings as persistSettings } from './lib/storage';
 
@@ -72,17 +72,11 @@ export default function App() {
     let mounted = true;
 
     const restoreSession = async () => {
-      const token = getToken();
-      if (!token) {
-        if (mounted) setIsAuthLoading(false);
-        return;
-      }
-
       const restoredUser = await verifySession();
       if (mounted) {
         if (restoredUser) {
           setUser(restoredUser);
-          setToken(token);
+          setToken('session');
         } else {
           setUser(null);
           setToken(null);
@@ -158,6 +152,20 @@ export default function App() {
       }
     };
     loadAll();
+  }, [data]);
+
+  useEffect(() => {
+    const refreshChangedData = (event: Event) => {
+      const entity = (event as CustomEvent<{ entity?: string }>).detail?.entity;
+      if (entity === 'leaves') {
+        void data.getLeaves().then(setLeaves).catch(error => logger.error('Failed to refresh changed leaves:', error));
+      }
+      if (entity === 'documents') {
+        void data.getEmployeeDocuments().then(setDocuments).catch(error => logger.error('Failed to refresh changed documents:', error));
+      }
+    };
+    window.addEventListener('hrm:data-changed', refreshChangedData);
+    return () => window.removeEventListener('hrm:data-changed', refreshChangedData);
   }, [data]);
 
   const handleSyncAll = async () => {
@@ -244,6 +252,8 @@ export default function App() {
     setOnboardingTasks([]);
     setOnboardingTemplates([]);
     setJobDescriptions([]);
+    setDepartments([]);
+    setDesignations([]);
   };
   const canAccess = (tab: string, role: string | undefined) => {
     const userRole = role || 'Employee';
@@ -486,7 +496,7 @@ export default function App() {
             )}
 
             {activeTab === 'leaves' && (
-              <Leaves />
+              canAccess('leaves', user?.role) ? <Leaves /> : <AccessDenied />
             )}
 
             {activeTab === 'payroll' && (

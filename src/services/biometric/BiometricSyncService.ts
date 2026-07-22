@@ -24,9 +24,14 @@ export class BiometricSyncService {
 
     // Create a map of punchCode -> employeeId
     const punchCodeMap = new Map<string, string>();
+    const duplicatePunchCodes = new Set<string>();
     employees.forEach(emp => {
       const code = emp.employment.punchCode || emp.id; // Fallback to employee ID
-      punchCodeMap.set(code, emp.id);
+      if (punchCodeMap.has(code)) {
+        duplicatePunchCodes.add(code);
+      } else {
+        punchCodeMap.set(code, emp.id);
+      }
     });
 
     const adapter = getBiometricAdapter(device.type);
@@ -42,6 +47,12 @@ export class BiometricSyncService {
       // Use punch.employeeId as the punch code to look up
       const punchCode = punch.employeeId;
       const employeeId = punchCodeMap.get(punchCode);
+
+      if (duplicatePunchCodes.has(punchCode)) {
+        failed++;
+        errors.push(`Duplicate employee punch code: ${punchCode}`);
+        continue;
+      }
       
       if (employeeId) {
         // Check if this punch already exists

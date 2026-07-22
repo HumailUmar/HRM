@@ -51,7 +51,7 @@ export default function ManagerReview({ managerId, managerName }: ManagerReviewP
     setProgress(Math.round((answeredQuestions / totalQuestions) * 100));
   }, [currentReview, selectedCycle]);
 
-  const handleStartReview = (employee: Employee, cycle: PerformanceReviewCycle) => {
+  const handleStartReview = async (employee: Employee, cycle: PerformanceReviewCycle) => {
     let review = reviews.find(r => r.employeeId === employee.id && r.reviewCycleId === cycle.id && r.reviewerType === 'Manager');
     if (!review) {
       review = {
@@ -105,7 +105,7 @@ export default function ManagerReview({ managerId, managerName }: ManagerReviewP
     alert('Draft saved successfully!');
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!currentReview || !selectedCycle) return;
 
     // Validate required questions

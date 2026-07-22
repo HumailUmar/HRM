@@ -162,7 +162,7 @@ export default function Settings({
   };
 
   // Confirm storage change switch
-  const handleConfirmSwitch = (type: 'local' | 'google-sheets' | 'mysql' | 'postgresql' | 'api') => {
+  const handleConfirmSwitch = async (type: 'local' | 'google-sheets' | 'mysql' | 'postgresql' | 'api') => {
     setStorageType(type);
     
     const updated: AppSettings = {
@@ -208,7 +208,7 @@ export default function Settings({
   };
 
   // Handle saving configurations
-  const handleSaveSettings = (e: FormEvent) => {
+  const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
 
     const updated: AppSettings = {

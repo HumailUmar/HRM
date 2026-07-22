@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "test": "jest --config jest.config.cjs --coverage",
     "test:watch": "jest --config jest.config.cjs --watch",
-    "test:ci": "jest --config jest.config.cjs --coverage --ci --maxWorkers=2"
+    "test:ci": "jest --config jest.config.cjs --coverage --ci --maxWorkers=2",
+    "predeploy": "node scripts/predeploy-check.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

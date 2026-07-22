@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Department, Employee, Designation } from '../types';
+import { useData } from '../contexts/DataContext';
 import { Search, Plus, Edit, Trash2, Building, Users, MapPin, DollarSign, ChevronRight, X, ArrowLeft, Building2, Coins, CheckCircle, AlertTriangle } from 'lucide-react';
 import { getEmployeeDesignation, getEmployeeDepartment } from '../lib/employeeUtils';
 
@@ -18,6 +19,7 @@ export default function Departments({
   setEmployees,
   designations
 }: DepartmentsProps) {
+  const data = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
 
@@ -126,8 +128,10 @@ export default function Departments({
   };
 
   // Save Department Form
-  const handleSaveDepartment = (e: React.FormEvent) => {
+  const handleSaveDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
+    const previousDepartments = departments;
+    let departmentToPersist: Department | null = null;
     if (!formName.trim() || !formCode.trim()) return;
 
     const headEmp = employees.find(emp => emp.id === formHeadId);
@@ -155,6 +159,7 @@ export default function Departments({
         return d;
       });
       setDepartments(updatedDepts);
+      departmentToPersist = updatedDepts.find(department => department.id === editingDept.id) || null;
 
       // If the department head has been updated, update the Employee record as well (sync department field)
       if (formHeadId) {
@@ -189,6 +194,7 @@ export default function Departments({
         updatedAt: new Date().toISOString()
       };
       setDepartments([...departments, newDept]);
+      departmentToPersist = newDept;
 
       // If head designated, update that employee's department
       if (formHeadId) {
@@ -204,6 +210,27 @@ export default function Departments({
         }));
       }
     }
+    if (departmentToPersist) {
+      try {
+        await data.saveDepartment(departmentToPersist);
+      } catch (error) {
+        setDepartments(previousDepartments);
+        return;
+      }
+      if (formHeadId) {
+        const head = employees.find(employee => employee.id === formHeadId);
+        if (head) {
+          const updatedHead = { ...head, departmentId: departmentToPersist.id, department: departmentToPersist.name };
+          try {
+            await data.saveEmployee(updatedHead);
+            setEmployees(employees.map(employee => employee.id === head.id ? updatedHead : employee));
+          } catch (error) {
+            setDepartments(previousDepartments);
+            return;
+          }
+        }
+      }
+    }
     setShowAddEditModal(false);
   };
 
@@ -214,11 +241,20 @@ export default function Departments({
   };
 
   // Confirm Delete
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deptToDelete) return;
+    const previousDepartments = departments;
+    const updatedDepartments = departments.filter(d => d.id !== deptToDelete.id);
+    setDepartments(updatedDepartments);
+    try {
+      await data.saveDepartment({ ...deptToDelete, isActive: false, updatedAt: new Date().toISOString() });
+    } catch (error) {
+      setDepartments(previousDepartments);
+      return;
+    }
 
     // Delete department
-    setDepartments(departments.filter(d => d.id !== deptToDelete.id));
+    setDepartments(updatedDepartments);
 
     // Update employees belonging to this department
     setEmployees(employees.map(emp => {

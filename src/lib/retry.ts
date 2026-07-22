@@ -47,7 +47,9 @@ export function pruneCircuitStates(): void {
   }
 }
 
-setInterval(pruneCircuitStates, 5 * 60 * 1000);
+const pruneInterval = setInterval(pruneCircuitStates, 5 * 60 * 1000);
+// Background circuit-state maintenance must not keep test/CLI processes alive.
+if (typeof (pruneInterval as any)?.unref === 'function') (pruneInterval as any).unref();
 
 export function getCircuitState(key: string): CircuitState {
   if (!circuitStates.has(key)) {
